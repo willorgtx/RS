@@ -1,0 +1,640 @@
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8.5.1/themes/algolia.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8.5.1/themes/reset-min.css" crossorigin="anonymous">
+
+<!-- Algolia search-only client & InstantSearch UMD bundles 
+<script src="https://cdn.jsdelivr.net/npm/algoliasearch@4/dist/algoliasearch-lite.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/instantsearch.js@4/dist/instantsearch.production.min.js"></script>-->
+
+<!-- (optional but recommended) InstantSearch theme CSS 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8/themes/satellite-min.css">-->
+
+
+<style>
+ /* ========== Fonts ========== */
+@font-face {
+  font-family: "Jost";
+  src: url(https://www.rugstudio.com/Shared/font/subset-Jost-Regular.woff2) format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Raleway";
+  src: url(https://www.rugstudio.com/Shared/font/Raleway-Thin.woff2) format("woff2");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ========== Base ========== */
+body {
+  font-family: "Jost", sans-serif;
+  padding: 1em;
+}
+
+div#sort-by {
+  text-align: right;
+  margin-top: 1em;
+}
+  
+.controls-wrapper {
+  display: flex;
+  justify-content: flex-end;  /* Push content to the right */
+  gap: 1rem;                  /* Space between stats and sort-by */
+  align-items: center;        /* Vertically align if needed */    
+}
+#stats, #sort-by {
+  white-space: nowrap;
+}
+
+span.ais-Stats-text {
+    font-size: 1.5em;
+    vertical-align: middle;
+}
+
+.ais-Stats {
+    margin-top: 1em;
+}
+
+/* ========== Layout ========== */
+.left-panel {
+  float: left;
+  width: 250px;
+  margin-top: 1em;
+  transition: transform 0.3s ease;
+}
+
+.right-panel {
+  margin-left: 260px;
+  margin-bottom: 200px;
+}
+
+#search_page_heading > h1 {
+  font-size: 4em;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+/* ========== Search Box ========== */
+.ais-SearchBox {
+  margin: 1em 0;
+}
+
+input.ais-SearchBox-input {
+  height: 4em;
+}
+
+button.ais-SearchBox-submit.btn.btn-default {
+  padding: 0;
+  overflow: visible;
+  font: inherit;
+  line-height: normal;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  position: absolute;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  top: 50%;
+  right: .3rem;
+  transform: translateY(-50%);
+}
+
+/* ========== Facet Sections ========== */
+.left-panel h2,
+.hit-card h2 {
+  font-family: 'Jost', sans-serif;
+  font-weight: 500;
+}
+
+.left-panel h2 {
+  background-color: #106d75;
+  color: white;
+  padding: 7px;
+  font-size: 16px;
+}
+
+.facet-header {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1em;
+  font-size: 1.1rem;
+  user-select: none;
+}
+
+.facet-header .caret {
+  font-size: .8em;
+  margin-left: .5em;
+  transition: transform .2s ease;
+}
+
+.facet-header.collapsed .caret {
+  transform: rotate(-90deg);
+}
+
+.facet-content {
+  transition: max-height .3s ease;
+  overflow: hidden;
+}
+
+.facet-content.collapsed {
+  max-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* ========== Refinement List ========== */
+.ais-RefinementList {
+  border-bottom: thin solid #c5c5c5;
+}
+
+.ais-RefinementList-label {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  font-size: 1.25rem !important;
+  padding: .25em 0;
+  width: 90%;
+}
+
+.ais-RefinementList-checkbox {
+  margin: 0 !important;
+  border-width: .5px;
+}
+
+.ais-RefinementList-labelText {
+  flex: 1;
+  font-size: 1em;
+  font-weight: 400;
+  font-family: "Jost", sans-serif;
+}
+
+.ais-RefinementList-count {
+  margin-left: .5em;
+  font-size: 1rem;
+  color: #555;
+  padding: 2px 10px;
+  font-family: "Jost", sans-serif;
+}
+
+button.ais-RefinementList-showMore {
+  padding: 0 15px 15px 3px;
+  text-decoration: underline;
+  font-size: 1.5em;
+  color: #930002;
+  font-weight: 600;
+  font-family: "Jost";
+  line-height: 1.35em;
+  background-color: #fff;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+button.ais-RefinementList-showMore:hover {
+  text-decoration: none;
+  color: #376476;
+  background-color: white;
+}
+
+/* ========== Show More/Show Less Arrows ========== */
+.facetshowless:before,
+.facetshowmore:before {
+  content: "^";
+  font-size: 1.5em;
+  display: inline-block;
+  vertical-align: middle;
+  padding-right: 6px;
+}
+
+.facetshowmore:before {
+  content: "V";
+  font-size: 1.2em;
+  font-weight: 700;
+  padding-right: 15px;
+  line-height: 1.35em;
+}
+
+/* ========== Collapse Facets === */
+.facet-content {
+  max-height: 1000px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.facet-content.collapsed {
+  max-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.left-panel h2 {
+  cursor: pointer;
+  position: relative;
+}
+
+.left-panel h2::after {
+  content: "\25BC";
+  position: absolute;
+  right: 10px;
+  transition: transform 0.3s ease;
+}
+
+.left-panel h2.collapsed::after {
+  transform: rotate(-90deg);
+}
+  
+/* ===== CurrentRefinments ====*/
+  
+div#current-refinements {flex: auto;margin: 2em auto auto 2em;}
+.ais-CurrentRefinements {color: #000000;}
+li.ais-CurrentRefinements-item {background-color: #dfe2ee;}
+span.ais-CurrentRefinements-label,span.ais-CurrentRefinements-categoryLabel {
+    color: #555;
+    font-size: 1.3em;
+    font-family: "Jost", sans-serif;
+    font-weight: 700;
+    padding: 2px 2px;
+    line-height: 1.5;
+}
+
+  
+/* ========== Hit Card ========== */
+.hit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+  text-align: center;
+  background-color: #fff;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  width: 100%;   
+}
+
+.ais-InfiniteHits-item {
+  width: auto;
+}
+  
+.hit-card img {
+  object-fit: contain;
+  max-height: 300px;
+  height: auto;
+  width: 100%;
+  margin-bottom: 1.25rem;
+  border-radius: 4px;
+}
+
+.titlewrapper {
+  padding: 10px;
+  text-align: left;
+}
+
+.hit-card h2 {
+  font-size: 1.25rem;
+  margin: 0;
+  line-height: 1.3;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #000;
+}
+
+.hit-card h2 a {
+  color: #3a4570;
+  text-decoration: none;
+}
+
+.hit-card h2 a:hover {
+  text-decoration: underline;
+}
+
+.ByMfgr,
+.hitPrice {
+  font-weight: 600;
+  text-align: left;
+  padding-left: 10px;
+}
+
+.ByMfgr {
+  font-family: "Raleway", sans-serif;
+  font-size: 1.2em;
+  color: #333;
+  padding-bottom: 10px;
+}
+
+.hitPrice {
+  font-size: 1.5em;
+  color: #930002;
+  font-family: "Jost";
+  line-height: 1.35em;
+}
+
+/* ========== Load More Button ========== */
+.ais-InfiniteHits-loadMore {
+  display: block;
+  margin: 2rem auto 0;
+  background-color: #0073a8;
+  color: #fff;
+  font-size: 1.75rem;
+  padding: 1.5rem 2rem;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color .2s ease;
+  min-width: 200px;
+  text-align: center;
+}
+
+.ais-InfiniteHits-loadMore:hover {
+  background-color: #376476;
+}
+
+/* ========== Mobile Filters Toggle Button ========== */
+#toggleFilters {
+  display: none;
+  font-size: 1.25rem;
+  padding: 0.75rem 1rem;
+  background-color: #0073a8;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin: 1rem 0;
+}
+
+/* ========== Filters Overlay on Mobile ========== */
+.left-panel.mobile-hidden {
+  transform: translateX(-110%);
+}
+
+.left-panel.mobile-visible {
+  transform: translateX(0);
+  background: #fff;
+  z-index: 1000;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  overflow-y: auto;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+  padding: 1em;
+}
+
+.close-filters {
+  display: none;
+  background-color: #960002;
+  color: white;
+  font-size: 1.25rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  width: 100%;
+  text-align: center;
+  cursor: pointer;
+  border-bottom: 1px solid #ccc;
+  transition: background-color 0.2s ease;
+}
+
+.close-filters:hover {
+    background-color: #691523;
+    color: #fff;
+}
+
+/* ========== Responsive Grid Layout ========== */
+.ais-InfiniteHits-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  padding: 0;
+  align-items: stretch;
+}
+
+/* ========== Responsive Breakpoints ========== */
+@media (min-width: 769px) and (max-width: 1023px) {
+  .ais-InfiniteHits-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .ais-InfiniteHits-list {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ========== Mobile Adjustments ========== */
+@media (max-width: 768px) {
+  .close-filters {
+    display: block;
+  }
+  #toggleFilters {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        justify-content: center;
+  }
+  .left-panel {
+    float: none;
+    width: 80%;
+    max-width: 300px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: white;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+    transform: translateX(-110%);
+    z-index: 1000;
+  }
+
+  .right-panel {
+    margin-left: 0;
+  }
+
+  .hit-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+  }
+
+  .hit-card h2 {
+    font-size: 1rem;
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+
+  .hit-card img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+
+  .ByMfgr {
+    font-size: 0.9rem;
+    text-align: center;
+    color: #666;
+  }
+
+  .hitPrice {
+    font-size: 1.1rem;
+    color: #0073a8;
+    text-align: center;
+    margin-top: 0.25rem;
+  }
+
+div#sort-by {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}  
+.ais-SortBy {
+    display: flex;
+    justify-content: space-between;
+    text-align: center;
+}
+select.ais-SortBy-select {
+    display: flex;
+    justify-content: flex-end;
+    flex-direction: row;
+    max-height: max-content;
+    margin: 1rem;
+}  
+  
+  .ais-InfiniteHits-loadMore {
+    width: 90%;
+    max-width: 300px;
+  }
+}
+
+</style>
+
+<!-- Search Structure -->
+<div class="ais-InstantSearch">
+  <h1 class="sr-only">Search Results</h1>
+
+
+  <div class="left-panel">
+    <button id="closeFilters" type="button" class="close-filters">Hide Filters</button>
+
+    <div id="clear-refinements"></div>
+<div class="facet-section">
+    <h2>Rug Size</h2>
+    <div class="facet-content" id="size-list"></div>
+</div>  
+<div class="facet-section">
+    <h2>Color</h2>
+    <div class="facet-content" id="color-list"></div>
+</div>  
+<div class="facet-section">
+    <h2>Style</h2>
+    <div class="facet-content" id="style-list"></div>
+ </div> 
+<div class="facet-section">
+    <h2>Price</h2>
+    <div class="facet-content" id="price-list"></div>
+</div>  
+<div class="facet-section">
+    <h2>Weave</h2>
+    <div class="facet-content" id="weave-list"></div>
+ </div> 
+<div class="facet-section">
+    <h2>Brands</h2>
+    <div class="facet-content" id="brand-list"></div>
+ </div> 
+<div class="facet-section">
+    <h2>Special</h2>
+    <div class="facet-content" id="promotion-list"></div>
+</div>      
+<div class="facet-section">
+    <h2>Material</h2>
+    <div class="facet-content" id="material-list"></div>
+</div>  
+  </div>
+
+  <div class="right-panel">
+    <div id="searchbox" class="hide"></div>
+    <div class="controls-wrapper">
+      <div id="current-refinements"></div>
+      <div id="stats"></div>
+      <div id="sort-by">  <button id="toggleFilters" type="button" class="toggle-filters">Show Filters</button></div>
+    </div>
+    <div id="results"></div>
+    <div id="infinite-hits"></div>
+  </div>
+</div>
+
+
+
+<script src="/Shared/js/algolia-search-results.js"></script>
+
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.facet-header').forEach(header => {
+      const targetId = header.dataset.target;
+      const content = document.getElementById(targetId);
+
+      header.addEventListener('click', () => {
+        const isCollapsed = content.classList.toggle('collapsed');
+        header.classList.toggle('collapsed', isCollapsed);
+      });
+    });
+  });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.facet-section h2').forEach(header => {
+    header.addEventListener('click', () => {
+      header.classList.toggle('collapsed');
+      const content = header.nextElementSibling;
+      content.classList.toggle('collapsed');
+    });
+  });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+const toggleButton = document.getElementById('toggleFilters');
+const closeButton = document.getElementById('closeFilters');
+const sidebar = document.querySelector('.left-panel');  
+if (toggleButton && !toggleButton.hasAttribute('type')) {
+  toggleButton.setAttribute('type', 'button');
+}  
+
+ toggleButton.addEventListener('click', () => {
+    sidebar.classList.add('mobile-visible');
+    sidebar.classList.remove('mobile-hidden');
+  });
+
+closeButton.addEventListener('click', () => {
+    sidebar.classList.remove('mobile-visible');
+    sidebar.classList.add('mobile-hidden');
+  });  
+  
+  // Ensure sidebar is hidden by default on mobile
+  if (window.innerWidth <= 768) {
+  sidebar.classList.add('mobile-hidden');
+}
+});
+</script>
+
