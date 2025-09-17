@@ -41,7 +41,18 @@ function normalizeFromUrlSingle(valueOrArray) {
     if (!raw)
       continue;
     const s = String(raw).replace(/\+/g, ' ').trim();
-    const spaced = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+    
+    // Special handling for price groups - preserve hyphens for price ranges
+    const isPriceGroup = /^\$?\d+-\$?\d+$/.test(s);
+    let spaced;
+    if (isPriceGroup) {
+      // For price groups like "$1000-$2500", preserve the hyphen
+      spaced = s;
+    } else {
+      // For other values, convert hyphens to spaces as before
+      spaced = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+    }
+    
     if (spaced)
       out.push(spaced);
   }
@@ -52,6 +63,13 @@ function normalizeFromUrlSingle(valueOrArray) {
 // If value contains punctuation other than hyphen, leave it as-is (ex: "Sisal / Jute").
 function canonicalizeForUrl(v) {
   const str = String(v || '');
+  
+  // Special handling for price groups - preserve them as-is
+  const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
+  if (isPriceGroup) {
+    return str;
+  }
+  
   const hasOtherPunct = /[^A-Za-z0-9\s-]/.test(str);
   // e.g., "/", "&", ","
   if (hasOtherPunct)
@@ -327,7 +345,7 @@ function hasAnyRefinements() {
         searchAsYouType: true,
         queryHook(query, search) {
           const normalized = query.trim().toLowerCase();
-          console.log(`Normalized query: "${normalized}"`);
+          // console.log(`Normalized query: "${normalized}"`);
 
           if (['rug pad', 'rug pads', 'jade pad', 'msm', 'cushion grip', 'magic stop', 'anchor pad', 'deluxe pad', 'non slip pad', 'non-slip pads'].includes(normalized)) {
             window.location.href = '/rugstudio-rug-pads.html';
@@ -416,7 +434,37 @@ onClick=${ () => refine(refinement)}
             const u = new URL(baseUrl, location.origin);
             if (hit.__queryID) u.searchParams.set('queryID', hit.__queryID);   // attribution
             u.searchParams.set('clickedID', String(hit.objectID));              // exact thing that was clicked (parent or child)
-            u.searchParams.set('index', hit.__indexName || 'product_index');    // optional but nice to have
+            // Try multiple approaches to get the current index
+            let currentIndex = hit.__indexName;
+            if (!currentIndex) {
+              // Try to get from search helper state
+              currentIndex = search.helper.state.sortBy;
+            }
+            if (!currentIndex) {
+              // Try to get from URL parameters
+              const urlParams = new URLSearchParams(window.location.search);
+              const sortParam = urlParams.get('sort');
+              if (sortParam) {
+                const sortMapping = {
+                  'relevance': 'product_index',
+                  'price_low': 'product_index_price_asc',
+                  'price_high': 'product_index_price_desc',
+                  'newest': 'product_index_newest'
+                };
+                currentIndex = sortMapping[sortParam];
+              }
+            }
+            if (!currentIndex) {
+              currentIndex = 'product_index';
+            }
+            
+            // console.log('[template] Hit index info:', {
+            //   hitIndexName: hit.__indexName,
+            //   currentIndex: currentIndex,
+            //   sortBy: search.helper.state.sortBy,
+            //   urlSort: new URLSearchParams(window.location.search).get('sort')
+            // });
+            u.searchParams.set('index', currentIndex);    // optional but nice to have
             const augmentedHref = u.toString();
 
             return html`
@@ -446,11 +494,26 @@ ${showChildPrices && !isParent && hit.sale_price ? html`<div class="hitPrice">$$
         },
 
         transformItems(items, {results}) {
-          console.log('[blend]', {
-            page: results.page,
-            query: results.query,
-            trending: trendingHits.length
-          });
+          // console.log('[blend]', {
+          //   page: results.page,
+          //   query: results.query,
+          //   trending: trendingHits.length
+          // });
+          
+          // Add the correct index name to each hit
+          // Try to get the index from results.index first, then fall back to sortBy
+          const currentIndex = results.index || search.helper.state.sortBy || 'product_index';
+          // console.log('[transformItems] Current sort state:', {
+          //   sortBy: search.helper.state.sortBy,
+          //   currentIndex: currentIndex,
+          //   resultsIndex: results.index
+          // });
+          
+          const itemsWithIndex = items.map(hit => ({
+            ...hit,
+            __indexName: currentIndex
+          }));
+          
           // Only pad on first page, empty query, and NO refinements
           const isFirstPage   = results.page === 0;
           const isEmptyQuery  = (results.query ?? '').trim() === '';
@@ -458,11 +521,11 @@ ${showChildPrices && !isParent && hit.sale_price ? html`<div class="hitPrice">$$
           const isDefaultIndex = results.index === 'product_index'; // adjust name if needed
 
           if (!isFirstPage || !isEmptyQuery || hasRefinements || !isDefaultIndex || trendingHits.length === 0) {
-            return items;
+            return itemsWithIndex;
           }
 
           // Remove any items that are already in trending
-          const filtered = items.filter(x => !trendingIDs.has(x.objectID));
+          const filtered = itemsWithIndex.filter(x => !trendingIDs.has(x.objectID));
 
           // Give the trending hits positions & queryID so Insights works
           const qid = results.queryID;
@@ -471,6 +534,7 @@ ${showChildPrices && !isParent && hit.sale_price ? html`<div class="hitPrice">$$
             ...h,
             __position: i + 1,
             __queryID: qid,
+            __indexName: currentIndex
           }));
 
           // Prepend, then cap to hitsPerPage so the grid size stays the same
@@ -606,7 +670,7 @@ filters: 'custom_flag1=1 AND hide=0 AND NOT categories.name:"Rug Pads"' + ' AND 
 }).then( ({results}) => {
 trendingHits = results?.[0]?.hits ?? [];
 trendingIDs = new Set(trendingHits.map(h => h.objectID));
-console.log('Trending blend candidates:', trendingHits.length, trendingHits);
+// console.log('Trending blend candidates:', trendingHits.length, trendingHits);
 search?.refresh?.();
 }
 ).catch(console.error);
@@ -647,7 +711,7 @@ const noResults = document.querySelector('#infinite-hits .ais-InfiniteHits--empt
 //if (queryID) {
 aa('viewedObjectIDs', {
 eventName: 'Hits Viewed',
-index: 'product_index',
+index: search.helper.state.sortBy || 'product_index',
 objectIDs: hits.map(hit => hit.objectID),
 //queryID: queryID, //queryID isn't required in Hits Viewed
 //userToken: localStorage.alg_user || 'anonymous'
@@ -692,7 +756,7 @@ return html`
   if (window.aa) {
     aa('clickedObjectIDs', {
       eventName: 'Trending Clicked',
-      index: 'product_index',
+      index: search.helper.state.sortBy || 'product_index',
       objectIDs: [reco.objectID]
     });
   }
