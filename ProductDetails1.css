@@ -1,0 +1,24 @@
+.ProductDetails-main a { text-decoration: underline; }
+.main-product-photo { padding: 0; }
+.ProductDetailsReviewRatingCount { font-size: var(--font-size-sm); }
+.ProductDetailsReviewRatingCount a { vertical-align: middle; }
+#lblProductTimeFrame { display: none; }
+#lblAvailability #lblProductStatus:after { content: "" }
+#dvProductQuantityInStock:before { content: ": "; vertical-align: middle; }
+.ProductDetailsDiscountList li { 
+  font-size: calc(0.9 * var(--font-size)); background: rgba(var(--gray-light-rgb), 0.27); 
+  color: var(--black); padding: var(--space-1); background-repeat: no-repeat; 
+  background-size: 24px auto; background-position: 5px 50%; padding-left: 35px; }
+#lblRetailPriceLabel { display: none; }
+[id^="ctlReviewRatingAverage"] { vertical-align: unset; }
+.stock-status-row > div, .stock-status-row > div > span {  color: var(--dark); font-weight: normal; vertical-align: middle; }
+#lblQtyInStockQuantity:after { content: " available"; }
+#lblQtyInStockLabel { display: none; }
+#dvProductQuantity .qty-wrapper { padding: 0; }
+#lblRewardPointsEarnedLabel, #lblBonusRewardPointsEarnedLabel { font-weight: bold; margin-right: var(--space-1) }
+.RelatedItemsAddToCartArea [id$=divQuantityLabelAndTextArea] label { font-size: 0; }
+[aria-expanded=true] .all-tab-icon:before { content: "\f068" }
+.tab-item [aria-expanded=true] { border-bottom: 0; }
+.ProductReviewItem-meta .StarRatings img { width: 16px; }
+.ProductDetailsTabs .card { border: 1px solid var(--control-border); }
+.ProductDetailsTabs .card:not(:last-of-type) { border-bottom: 0 }

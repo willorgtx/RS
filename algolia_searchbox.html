@@ -1,0 +1,32 @@
+<div id="siteSearch" class="nav-search center">
+<label class="sr-only" for="global-search-input">Search rugs</label>
+<input id="global-search-input" type="search" placeholder="Search rugs…" autocomplete="off" />
+</div>
+
+<script>
+(function () {
+const input = document.getElementById('global-search-input');
+
+// 1) Catch Enter on the input
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (q) window.location.href = `/search/?q=${encodeURIComponent(q)}`;
+  }
+});
+
+// 2) ALSO cancel the parent ASP.NET form submit when it comes from this input
+const outerForm = input.form; // Americommerce wraps page in a single <form>
+if (outerForm) {
+  outerForm.addEventListener('submit', (e) => {
+    // If focus is in our nav search, treat submit like our Enter handler
+    if (document.activeElement === input || outerForm.contains(input)) {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (q) window.location.href = `/search/?q=${encodeURIComponent(q)}`;
+    }
+  });
+}
+})();
+</script>

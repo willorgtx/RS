@@ -8,6 +8,13 @@
 <!-- (optional but recommended) InstantSearch theme CSS 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8/themes/satellite-min.css">-->
 
+<script src="https://cdn.jsdelivr.net/npm/algoliasearch@5.35.0/dist/algoliasearch.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/algoliasearch@5.35.0/dist/lite/builds/browser.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/instantsearch.js@4.79.2/dist/instantsearch.production.min.js"></script> 
+
+
+
+<link rel="stylesheet" href="rs.css">
 
 <style>
  /* ========== Fonts ========== */
@@ -281,7 +288,7 @@ span.ais-CurrentRefinements-label,span.ais-CurrentRefinements-categoryLabel {
   width: 100%;   
 }
 
-.ais-InfiniteHits-item {
+.ais-InfiniteHits-item, .ais-TrendingItems-item {
   width: auto;
 }
   
@@ -409,7 +416,7 @@ span.ais-CurrentRefinements-label,span.ais-CurrentRefinements-categoryLabel {
 }
 
 /* ========== Responsive Grid Layout ========== */
-.ais-InfiniteHits-list {
+.ais-InfiniteHits-list, .ais-TrendingItems-list {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
@@ -417,15 +424,30 @@ span.ais-CurrentRefinements-label,span.ais-CurrentRefinements-categoryLabel {
   align-items: stretch;
 }
 
+.no-results-container {
+  text-align: center;
+    font-size: 2em;
+    padding: 1.5em 0;
+    background: #f5f0e7;
+    margin: 1em 0;
+}
+
+h3.ais-TrendingItems-title {
+  text-align: center;
+    font-size: 3em;
+    font-weight: 100;
+    text-transform: capitalize;
+}
+
 /* ========== Responsive Breakpoints ========== */
 @media (min-width: 769px) and (max-width: 1023px) {
-  .ais-InfiniteHits-list {
+  .ais-InfiniteHits-list, .ais-TrendingItems-list  {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
 @media (min-width: 1024px) {
-  .ais-InfiniteHits-list {
+  .ais-InfiniteHits-list, .ais-TrendingItems-list  {
     grid-template-columns: repeat(4, 1fr);
   }
 }
@@ -526,6 +548,26 @@ select.ais-SortBy-select {
 
 </style>
 
+<div id="siteSearch" class="nav-search center">
+  <label class="sr-only" for="global-search-input">Search rugs</label>
+  <input id="global-search-input" type="search" placeholder="Search rugs…" autocomplete="off" />
+</div>
+
+
+<script>
+  (function () {
+  const input = document.getElementById('global-search-input');
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();            // stop the outer form from submitting
+      const q = encodeURIComponent(input.value.trim());
+      if (q) window.location.href = `algolia-search-results.html?query=${q}`;
+    }
+  });
+})();
+
+</script>
 <!-- Search Structure -->
 <div class="ais-InstantSearch">
   <h1 class="sr-only">Search Results</h1>
@@ -583,8 +625,8 @@ select.ais-SortBy-select {
 
 
 
-<script src="/Shared/js/algolia-search-results.js"></script>
-
+<!--<script src="/Shared/js/algolia-search-results.js"></script>-->
+<script src="algolia-search-results.js"></script>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
