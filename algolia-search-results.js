@@ -581,6 +581,9 @@ ${showChildPrices && !isParent && hit.sale_price ? html`<div class="hitPrice">$$
         showMore: true,
         limit: 5,
         showMoreLimit: 32,
+        templates: {
+          showMoreText: ({isShowingMore}) => isShowingMore ? '<span class="facetshowless"></span>Show Less' : '<span class="facetshowmore"></span>Show more'
+        },
         // or however many you want to allow
         transformItems(items, {results}) {
           // 1 — collect filters that came from Rules
