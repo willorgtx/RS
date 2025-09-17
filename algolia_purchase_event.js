@@ -58,15 +58,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ---- Build Insights payload ------------------------------------
-  const objectIDs  = [];
-  const objectData = [];
+  const items = [];
 
   rows.forEach((row, iRow) => {
     const sku = lookups[iRow];
     if (!sku) return;
 
     // each row produced 2 requests
-    const hitIdx = objectIDs.length * 2;
+    const hitIdx = items.length * 2;
     const hit = results?.[hitIdx]?.hits?.[0] || results?.[hitIdx + 1]?.hits?.[0];
     const objectID = (hit && hit.objectID) || sku;
 
@@ -81,34 +80,61 @@ window.addEventListener('DOMContentLoaded', async () => {
       position = ctx.pos;
     } catch {}
 
-    objectIDs.push(objectID);
-    objectData.push({
+    items.push({
+      objectID,
       price,
       quantity: qty,
-      ...(queryID && { queryID }),
-      ...(position !== undefined && { position })
+      queryID,
+      position
     });
 
     localStorage.removeItem(`alg_ctx_${objectID}`);
   });
 
-  if (!objectIDs.length) return;
+  if (!items.length) return;
 
-  const totalValue = objectData.reduce((sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0), 0);
+  const eventName = 'Order Placed';
+  const currency = 'USD';
 
-  const payload = {
-    eventName: 'Order Placed',
-    index: INDEX,
-    objectIDs,
-    objectData,
-    currency: 'USD',
-    value: Number(totalValue.toFixed(2))
-  };
+  const calcValue = group => group.reduce((sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 0), 0);
+  const buildObjectData = group => group.map(({ price, quantity, position }) => ({
+    price,
+    quantity,
+    ...(position !== undefined && { position })
+  }));
 
-  const method = objectData.some(i => i.queryID)
-    ? 'purchasedObjectIDsAfterSearch'
-    : 'purchasedObjectIDs';
+  const groupedByQuery = items.reduce((acc, item) => {
+    if (item.queryID) {
+      (acc[item.queryID] ||= []).push(item);
+    }
+    return acc;
+  }, {});
 
-  aa(method, payload);
+  Object.entries(groupedByQuery).forEach(([queryID, group]) => {
+    const value = Number(calcValue(group).toFixed(2));
+    aa('purchasedObjectIDsAfterSearch', {
+      eventName,
+      index: INDEX,
+      queryID,
+      objectIDs: group.map(i => i.objectID),
+      objectData: buildObjectData(group),
+      currency,
+      value
+    });
+  });
+
+  const withoutQuery = items.filter(i => !i.queryID);
+  if (withoutQuery.length) {
+    const value = Number(calcValue(withoutQuery).toFixed(2));
+    aa('purchasedObjectIDs', {
+      eventName,
+      index: INDEX,
+      objectIDs: withoutQuery.map(i => i.objectID),
+      objectData: buildObjectData(withoutQuery),
+      currency,
+      value,
+      inferQueryID: true
+    });
+  }
 });
 
