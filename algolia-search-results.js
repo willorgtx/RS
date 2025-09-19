@@ -90,7 +90,71 @@ const initialQuery = params.get('q') || '';
 
 const {liteClient: algoliasearch} = window['algoliasearch/lite'];
 const searchClient = algoliasearch('6Z7PXO4P9V', 'cf6feac06fa1069b5dd3ed1b02b7fbcf');
-//const {trendingItems} = instantsearch.widgets;
+
+// === Auto-facet from query — config & helpers ===
+const AUTOFACET_ATTRS = [
+  'attributes.Colors',
+  'attributes.MaterialCategory',
+  'attributes.Origin',
+  'attributes.Size',
+  'attributes.Styles',
+  'attributes.Weave',
+];
+const _auto_vocabByAttr = {};       // { attr -> Map<normVal -> originalFacetValue> }
+let   _auto_vocabReady   = false;   // gate so we don't loop while fetching
+let   _auto_inHook       = false;   // loop guard in queryHook
+
+// Normalizer: “6 x 9” / “6×9” → “6x9”, trims & lowercases, collapses spaces
+function _auto_norm(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[’']/g, '')     // feet/quote marks
+    .replace(/×/g, 'x')       // unicode ×
+    .replace(/\s*x\s*/g, 'x') // tight sizes
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+// Preload facet vocab with SFFV (safe with search-only key)
+async function _auto_preloadFacetVocab(index) {
+  try {
+    const maxFacetHits = 200; // bump if you truly need more
+    for (const attr of AUTOFACET_ATTRS) {
+      const resp = await index.searchForFacetValues(attr, '', { maxFacetHits });
+      const m = new Map();
+      for (const fh of (resp.facetHits || [])) {
+        m.set(_auto_norm(fh.value), fh.value); // norm -> original
+      }
+      _auto_vocabByAttr[attr] = m;
+    }
+    _auto_vocabReady = true;
+  } catch (e) {
+    console.error('[autofacet] preload failed', e);
+    _auto_vocabReady = false;
+  }
+}
+
+// Find which facet values appear in the user’s query
+function _auto_extractRefinements(query) {
+  if (!_auto_vocabReady) return [];
+  const nq = _auto_norm(query);
+  const found = [];
+  for (const attr of AUTOFACET_ATTRS) {
+    const vocab = _auto_vocabByAttr[attr];
+    if (!vocab) continue;
+    for (const [nVal, original] of vocab.entries()) {
+      if (nq.includes(nVal)) {
+        found.push({ attr, value: original, nVal });
+      }
+    }
+  }
+  // de-dupe by attr+value
+  const key = o => `${o.attr}::${o.value}`;
+  return Array.from(new Map(found.map(o => [key(o), o])).values());
+}
+
+// Kick off vocab preload (non-blocking)
+const _auto_index = searchClient.initIndex('product_index');
+_auto_preloadFacetVocab(_auto_index);
 
 //helper to detect refinements
 function hasAnyRefinements() {
@@ -343,16 +407,57 @@ function hasAnyRefinements() {
         autofocus: true,
         showSubmit: false,
         searchAsYouType: true,
-        queryHook(query, search) {
+        queryHook(query, refine) {
           const normalized = query.trim().toLowerCase();
-          // console.log(`Normalized query: "${normalized}"`);
-
+        
+          // Your existing rug-pad redirect logic
           if (['rug pad', 'rug pads', 'jade pad', 'msm', 'cushion grip', 'magic stop', 'anchor pad', 'deluxe pad', 'non slip pad', 'non-slip pads'].includes(normalized)) {
             window.location.href = '/rugstudio-rug-pads.html';
-          } else {
-            search(query);
-            // proceed with regular search
+            return;
           }
+        
+          // Prevent recursive loop
+          if (_auto_inHook) {
+            _auto_inHook = false;
+            return refine(query);
+          }
+        
+          // If vocab not ready yet, just run the search
+          if (!_auto_vocabReady || !query) {
+            return refine(query);
+          }
+        
+          // Find facet values inside the query
+          const matches = _auto_extractRefinements(query);
+        
+          if (matches.length) {
+            // Apply as real refinements (so the boxes are checked and removable)
+            let changed = false;
+            for (const { attr, value } of matches) {
+              const already =
+                (search.helper.state.disjunctiveFacetsRefinements?.[attr] || []).includes(value) ||
+                (search.helper.state.facetsRefinements?.[attr] || []).includes(value);
+              if (!already) {
+                // All six attributes are on refinementList widgets (disjunctive)
+                search.helper.addDisjunctiveFacetRefinement(attr, value);
+                changed = true;
+              }
+            }
+        
+            // Strip the matched tokens out of the query so they don’t re-apply
+            let stripped = _auto_norm(query);
+            // remove whole-token occurrences; keep simple for now
+            for (const { nVal } of matches) {
+              stripped = stripped.replace(new RegExp(`\\b${nVal}\\b`, 'g'), ' ').replace(/\s+/g, ' ').trim();
+            }
+        
+            _auto_inHook = true;
+            // Use the stripped query; the applied facets now show up as checked pills/boxes
+            return refine(stripped);
+          }
+        
+          // No auto matches; continue as normal
+          refine(query);
         }
       }), instantsearch.widgets.stats({
         container: '#stats',
@@ -661,20 +766,20 @@ let trendingHits = [];
 let trendingIDs = new Set();
 
 searchClient.getRecommendations({
-requests: [{
-model: 'trending-items',
-threshold: 60,
-indexName: 'product_index',
-maxRecommendations: TRENDING_N,
-queryParameters: {
-filters: 'custom_flag1=1 AND hide=0 AND NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad" AND NOT categories.name:"Rugstudio-Rug-Pads" AND NOT manufacturer:"Solo Rugs" AND NOT attributes.Promotion:"LAST CHANCE"'
-}
-}]
-}).then( ({results}) => {
-trendingHits = results?.[0]?.hits ?? [];
-trendingIDs = new Set(trendingHits.map(h => h.objectID));
-// console.log('Trending blend candidates:', trendingHits.length, trendingHits);
-search?.refresh?.();
+  requests: [{
+    model: 'trending-items',
+    threshold: 60,
+    indexName: 'product_index',
+    maxRecommendations: TRENDING_N,
+    queryParameters: {
+      filters: 'custom_flag1=1 AND hide=0 AND NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad" AND NOT categories.name:"Rugstudio-Rug-Pads" AND NOT manufacturer:"Solo Rugs" AND NOT attributes.Promotion:"LAST CHANCE"'
+    }
+  }]
+}).then(({ results }) => {
+  trendingHits = results?.[0]?.hits ?? [];
+  trendingIDs = new Set(trendingHits.map(h => h.objectID));
+  // console.log('Trending blend candidates:', trendingHits.length, trendingHits);
+  search?.refresh?.();
 }
 ).catch(console.error);
 search.start();
