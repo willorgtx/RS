@@ -38,26 +38,34 @@ function normalizeFromUrlSingle(valueOrArray) {
   const values = Array.isArray(valueOrArray) ? valueOrArray : [valueOrArray];
   const out = [];
   for (const raw of values) {
-    if (!raw)
-      continue;
-    const s = String(raw).replace(/\+/g, ' ').trim();
-    
+    if (!raw) continue;
+    const s0 = String(raw).replace(/\+/g, ' ').trim();
+
     // Special handling for price groups - preserve hyphens for price ranges
-    const isPriceGroup = /^\$?\d+-\$?\d+$/.test(s);
-    let spaced;
-    if (isPriceGroup) {
-      // For price groups like "$1000-$2500", preserve the hyphen
-      spaced = s;
-    } else {
-      // For other values, convert hyphens to spaces as before
-      spaced = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+    if (/^\$?\d+-\$?\d+$/.test(s0)) {
+      out.push(s0);
+      continue;
     }
-    
-    if (spaced)
-      out.push(spaced);
+
+    // NEW: normalize tight size patterns like "6x9", "2.5x8", "8X10", "9x12x1" -> "6 x 9", …
+    // (handles 2D or 3D forms)
+    const sizeMatch = s0.match(
+      /^(\d+(?:\.\d+)?)\s*[xX]\s*(\d+(?:\.\d+)?)(?:\s*[xX]\s*(\d+(?:\.\d+)?))?$/
+    );
+    let spaced;
+    if (sizeMatch) {
+      const parts = sizeMatch.slice(1).filter(Boolean);
+      spaced = parts.join(' x ');      // e.g., "6 x 9" or "9 x 12 x 1"
+    } else {
+      // previous behavior: hyphens → spaces, title-case words
+      spaced = titleCaseWords(s0.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+    }
+
+    if (spaced) out.push(spaced);
   }
   return dedupeLoose(out);
 }
+
 
 // Prefer hyphenated params in the URL, but don't make ugly slugs when punctuation is present.
 // If value contains punctuation other than hyphen, leave it as-is (ex: "Sisal / Jute").
@@ -835,10 +843,11 @@ const isChildSku = /^\d+x\d+$/i.test(q);
 
 const sizeRefinements = search.helper.getRefinements('attributes.Size');
 const autoSizeFromRule = search.renderState?.product_index?.results?.explain?.params?.rules?.facetFilters?.some(f => f.startsWith('attributes.Size:')) || false;
-
+const urlParams = new URLSearchParams(location.search);
+const hasSizeParam = urlParams.has('sizes') || urlParams.has('size');
  
 // update the existing flag (DON’T redeclare)
-showChildPrices = sizeRefinements.length > 0 || autoSizeFromRule || isChildSku;
+showChildPrices = hasSizeParam || sizeRefinements.length > 0 || autoSizeFromRule || isChildSku;
 
 const baseFilters = ['hide = 0'];
 const parentFilter = 'custom_flag1 = 1';
