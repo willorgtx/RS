@@ -98,11 +98,13 @@ const AUTOFACET_ATTRS = [
   'attributes.Origin',
   'attributes.Size',
   'attributes.Styles',
+  'manufacturer',
   'attributes.Weave',
 ];
 const _auto_vocabByAttr = {};       // { attr -> Map<normVal -> originalFacetValue> }
 let   _auto_vocabReady   = false;   // gate so we don't loop while fetching
 let   _auto_inHook       = false;   // loop guard in queryHook
+
 
 // Normalizer: “6 x 9” / “6×9” → “6x9”, trims & lowercases, collapses spaces
 function _auto_norm(s) {
@@ -114,23 +116,29 @@ function _auto_norm(s) {
     .replace(/\s+/g, ' ')
     .trim();
 }
-// Preload facet vocab with SFFV (safe with search-only key)
-async function _auto_preloadFacetVocab(index) {
-  try {
-    const maxFacetHits = 200; // bump if you truly need more
-    for (const attr of AUTOFACET_ATTRS) {
-      const resp = await index.searchForFacetValues(attr, '', { maxFacetHits });
-      const m = new Map();
-      for (const fh of (resp.facetHits || [])) {
-        m.set(_auto_norm(fh.value), fh.value); // norm -> original
-      }
-      _auto_vocabByAttr[attr] = m;
+// Build the facet vocab from the latest results instead of SFFV
+function _auto_buildVocabFromLastResults() {
+  const res = search?.helper?.lastResults;
+  if (!res) return;
+
+  for (const attr of AUTOFACET_ATTRS) {
+    let hits = [];
+    try {
+      // returns [{ name, count, isRefined }, ...] or throws if facet unknown
+      hits = res.getFacetValues(attr) || [];
+    } catch (_) {
+      hits = [];
     }
-    _auto_vocabReady = true;
-  } catch (e) {
-    console.error('[autofacet] preload failed', e);
-    _auto_vocabReady = false;
+    const m = new Map();
+    for (const h of hits) {
+      if (!h || !h.name) continue;
+      m.set(_auto_norm(h.name), String(h.name));
+    }
+    _auto_vocabByAttr[attr] = m;
   }
+
+  // Mark ready if we got anything at all
+  _auto_vocabReady = Object.values(_auto_vocabByAttr).some(m => m && m.size);
 }
 
 // Find which facet values appear in the user’s query
@@ -152,10 +160,43 @@ function _auto_extractRefinements(query) {
   return Array.from(new Map(found.map(o => [key(o), o])).values());
 }
 
-// Kick off vocab preload (non-blocking)
-const _auto_index = searchClient.initIndex('product_index');
-_auto_preloadFacetVocab(_auto_index);
+// NEW — apply once from the current query after vocab preloads
+let _auto_appliedOnce = false;
+function _auto_applyFromCurrentQuery() {
+  if (_auto_appliedOnce || !_auto_vocabReady) return;
 
+  const q = search?.helper?.state?.query || '';
+  if (!q) return;
+
+  const matches = _auto_extractRefinements(q);
+  if (!matches.length) return;
+
+  let changed = false;
+  for (const { attr, value } of matches) {
+    const already =
+      (search.helper.state.disjunctiveFacetsRefinements?.[attr] || []).includes(value) ||
+      (search.helper.state.facetsRefinements?.[attr] || []).includes(value);
+    if (!already) {
+      search.helper.addDisjunctiveFacetRefinement(attr, value);
+      changed = true;
+    }
+  }
+
+  // strip tokens so the facet remains removable
+  let stripped = _auto_norm(q);
+  for (const { nVal } of matches) {
+    stripped = stripped.replace(new RegExp(`\\b${nVal}\\b`, 'g'), ' ')
+                       .replace(/\s+/g, ' ')
+                       .trim();
+  }
+
+  _auto_appliedOnce = true;
+  if (changed) {
+    search.helper.setQuery(stripped).search();
+  }
+}
+
+ 
 //helper to detect refinements
 function hasAnyRefinements() {
   const s = search.helper?.state;
@@ -786,12 +827,16 @@ search.start();
 
 search.on('render', () => {
 const q = (search.helper.state.query || '').trim();
+// Build vocab from the current results, then apply from initial ?q=...
+_auto_buildVocabFromLastResults();
+if (_auto_vocabReady && !_auto_appliedOnce) _auto_applyFromCurrentQuery();  
 const isChildSku = /^\d+x\d+$/i.test(q);
 // 262081x1, 262081X2 …
 
 const sizeRefinements = search.helper.getRefinements('attributes.Size');
 const autoSizeFromRule = search.renderState?.product_index?.results?.explain?.params?.rules?.facetFilters?.some(f => f.startsWith('attributes.Size:')) || false;
 
+ 
 // update the existing flag (DON’T redeclare)
 showChildPrices = sizeRefinements.length > 0 || autoSizeFromRule || isChildSku;
 
