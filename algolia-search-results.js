@@ -462,11 +462,11 @@ return `${baseUrl}search/${categoryPath}${queryString}`;
   insights: true,
 
     /* Keep the first query in sync */
-    initialUiState: {
+    /*initialUiState: {
       product_index: {
         query: initialQuery
       }
-    }
+    }*/
 });
 
 const {infiniteHits} = instantsearch.widgets;
@@ -848,7 +848,7 @@ showMoreText: ({isShowingMore}) => isShowingMore ? '<span class="facetshowless">
 }
 }), instantsearch.widgets.configure({
 hitsPerPage: 16,
-filters: 'custom_flag1 = 1 AND hide = 0' + ' AND NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad"' + ' AND NOT categories.name:"Rugstudio-Rug-Pads"',
+filters: 'hide = 0 AND custom_flag1 = 1' + ' AND NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad"' + ' AND NOT categories.name:"Rugstudio-Rug-Pads"',
 //query: initialQuery,
 clickAnalytics: true,
 //getRankingInfo: true,
@@ -873,10 +873,12 @@ filters: 'custom_flag1=1 AND hide=0 AND NOT categories.name:"Rug Pads"' + ' AND 
 trendingHits = results?.[0]?.hits ?? [];
 trendingIDs = new Set(trendingHits.map(h => h.objectID));
 // console.log('Trending blend candidates:', trendingHits.length, trendingHits);
-search?.refresh?.();
-}
-).catch(console.error);
-search.start();
+//search?.refresh?.();
+})
+.catch(console.error)
+.finally(() => { search.start(); });
+
+let showingChildren = false;
 
 search.on('render', () => {
 const q = (search.helper.state.query || '').trim();
@@ -892,17 +894,16 @@ const autoSizeFromRule = search.renderState?.product_index?.results?.explain?.pa
 
 // update the existing flag (DON’T redeclare)
 showChildPrices = sizeRefinements.length > 0 || autoSizeFromRule || isChildSku;
-
+const wantChildren = showChildPrices; // your existing logic decides this
 const baseFilters = ['hide = 0'];
 const parentFilter = 'custom_flag1 = 1';
 const childFilter = 'custom_flag1 = 0';
 
-const desiredFilter = showChildPrices ? childFilter : parentFilter;
+const newFilterString = [...baseFilters, wantChildren ? childFilter : parentFilter, rugPadsExclude].join(' AND ');
 
-const newFilterString = [...baseFilters, desiredFilter, rugPadsExclude].join(' AND ');
-
-if (search.helper.state.filters !== newFilterString) {
-search.helper.setQueryParameter('filters', newFilterString).search();
+if (wantChildren !== showingChildren || search.helper.state.filters !== newFilterString) {
+  showingChildren = wantChildren;
+  search.helper.setQueryParameter('filters', newFilterString).search();
 }
 
 const results = search.renderState?.product_index?.infiniteHits?.results;

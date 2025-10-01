@@ -580,7 +580,7 @@ const SORT_INDEX_TO_ROUTE = Object.entries(SORT_ROUTE_TO_INDEX).reduce((acc, [k,
       explain: ['*'],
       removeWordsIfNoResults: 'allOptional',
       hitsPerPage: 16,
-      filters: 'custom_flag1 = 1 AND hide = 0'
+      filters: 'hide = 0 AND custom_flag1 = 1'
     })
   ]);
 
@@ -588,6 +588,7 @@ const SORT_INDEX_TO_ROUTE = Object.entries(SORT_ROUTE_TO_INDEX).reduce((acc, [k,
 
   // === Enhanced Analytics (from search-results.js) ===
   let showChildPrices = false;
+  let showingChildren = false; // track current mode (false=parents, true=children)
   search.on('render', () => {
     const q = (search.helper.state.query || '').trim();
     const isChildSku = /^\d+x\d+$/i.test(q);
@@ -606,15 +607,13 @@ const SORT_INDEX_TO_ROUTE = Object.entries(SORT_ROUTE_TO_INDEX).reduce((acc, [k,
     const baseFilters = ['hide = 0'];
     const parentFilter = 'custom_flag1 = 1';
     const childFilter = 'custom_flag1 = 0';
-    const desiredFilter = showChildPrices ? childFilter : parentFilter;
-    const newFilterString = [...baseFilters, desiredFilter].join(' AND ');
-
-    if (search.helper.state.filters !== newFilterString) {
-      search.helper
-        .setQueryParameter('filters', newFilterString)
-        .search();
+    const wantChildren = showChildPrices;
+    if (wantChildren !== showingChildren) {
+      showingChildren = wantChildren;
+      const desiredFilter = wantChildren ? childFilter : parentFilter;
+      const newFilterString = [...baseFilters, desiredFilter].join(' AND ');
+      search.helper.setQueryParameter('filters', newFilterString).search();
     }
-
     // === Send viewedObjectIDs event ===
     const results = search.renderState?.product_index?.infiniteHits?.results;
     const hits = results?.hits || [];
