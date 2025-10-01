@@ -52,16 +52,26 @@ function normalizeFromUrlSingle(valueOrArray) {
     const sizeMatch = s0.match(
       /^(\d+(?:\.\d+)?)\s*[xX]\s*(\d+(?:\.\d+)?)(?:\s*[xX]\s*(\d+(?:\.\d+)?))?$/
     );
-    let spaced;
+    let sizeVariants = [];
     if (sizeMatch) {
       const parts = sizeMatch.slice(1).filter(Boolean);
-      spaced = parts.join(' x ');      // e.g., "6 x 9" or "9 x 12 x 1"
+      const compact = parts.join('x');
+      const spaced = parts.join(' x ');      // e.g., "6 x 9" or "9 x 12 x 1"
+
+      sizeVariants = [s0, compact, spaced]
+        .map(v => String(v || '').trim())
+        .filter(Boolean);
     } else {
       // previous behavior: hyphens → spaces, title-case words
-      spaced = titleCaseWords(s0.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+      const spaced = titleCaseWords(s0.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+      sizeVariants = [spaced];
     }
 
-    if (spaced) out.push(spaced);
+    if (sizeVariants.length) {
+      for (const variant of dedupeLoose(sizeVariants)) {
+        out.push(variant);
+      }
+    }
   }
   return dedupeLoose(out);
 }
