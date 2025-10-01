@@ -138,17 +138,50 @@ function normalizeFromUrlSingle(valueOrArray) {
   for (const raw of values) {
     if (!raw) continue;
     const s = String(raw).replace(/\+/g, ' ').trim();
-    
+
     // Special handling for price groups - preserve hyphens for price ranges
-    const isPriceGroup = /^\$?\d+-\$?\d+$/.test(s);
-    let spaced;
-    if (isPriceGroup) {
-      spaced = s;
-    } else {
-      spaced = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+    if (/^\$?\d+-\$?\d+$/.test(s)) {
+      out.push(s);
+      continue;
     }
-    
-    if (spaced) out.push(spaced);
+
+    const variants = new Set();
+    const base = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
+    if (base) variants.add(base);
+
+    const sizeCandidate = s.replace(/[×]/g, 'x');
+    const sizeParts = sizeCandidate.split(/x/i).map(part => part.trim()).filter(Boolean);
+    const sizeLike = sizeParts.length >= 2 && sizeParts.every(part => /^[0-9'"′″\s\/.:-]+$/.test(part));
+    if (sizeLike) {
+      const normalizedParts = sizeParts.map(part => part.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+      const joinParts = delim => normalizedParts.join(delim).replace(/\s+/g, ' ').trim();
+      const collapsed = normalizedParts.join('x').replace(/\s+/g, '');
+
+      if (normalizedParts.length) {
+        const spaced = joinParts(' x ');
+        const spacedUpper = joinParts(' X ');
+        if (spaced) variants.add(spaced);
+        if (spacedUpper) variants.add(spacedUpper);
+        if (collapsed) variants.add(collapsed);
+
+        const hasQuote = normalizedParts.some(part => /['"′″]/.test(part));
+        const isPlainNumber = part => /^\d+(?:\s*\d\/\d)?$/.test(part);
+        if (!hasQuote && normalizedParts.every(isPlainNumber)) {
+          const withFeetParts = normalizedParts.map(part => `${part}'`);
+          const withFeet = withFeetParts.join(' x ');
+          const withFeetUpper = withFeetParts.join(' X ');
+          if (withFeet) variants.add(withFeet);
+          if (withFeetUpper) variants.add(withFeetUpper);
+        }
+      }
+    }
+
+    if (s) variants.add(s);
+
+    for (const v of variants) {
+      const finalValue = String(v).replace(/\s+/g, ' ').trim();
+      if (finalValue) out.push(finalValue);
+    }
   }
   return dedupeLoose(out);
 }
