@@ -117,10 +117,22 @@ function dedupe(arr) {
 function dedupeLoose(arr) {
   const out = [];
   const seen = new Set();
-  const key = v => String(v).replace(/[\s-]+/g, '-').toLowerCase();
+  const key = v => {
+    const raw = String(v ?? '').trim();
+    if (!raw) return '';
+
+    const lower = raw.toLowerCase();
+    const sizeish = lower.replace(/[×]/g, 'x');
+    // If the value looks like a size (numbers/quotes around an x), collapse whitespace/punctuation
+    if (/(?:\d|['"′″])\s*x\s*(?:\d|['"′″])/.test(sizeish)) {
+      return sizeish.replace(/[^0-9a-z]+/g, '');
+    }
+
+    return lower.replace(/[\s-]+/g, '-');
+  };
   for (const v of (arr || []).filter(Boolean)) {
     const k = key(v);
-    if (!seen.has(k)) {
+    if (k && !seen.has(k)) {
       seen.add(k);
       out.push(String(v));
     }
