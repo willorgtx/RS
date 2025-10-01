@@ -38,56 +38,38 @@ function normalizeFromUrlSingle(valueOrArray) {
   const values = Array.isArray(valueOrArray) ? valueOrArray : [valueOrArray];
   const out = [];
   for (const raw of values) {
-    if (!raw) continue;
-    const s0 = String(raw).replace(/\+/g, ' ').trim();
+    if (!raw)
+      continue;
+    const s = String(raw).replace(/\+/g, ' ').trim();
 
     // Special handling for price groups - preserve hyphens for price ranges
-    if (/^\$?\d+-\$?\d+$/.test(s0)) {
-      out.push(s0);
-      continue;
-    }
-
-    // NEW: normalize tight size patterns like "6x9", "2.5x8", "8X10", "9x12x1" -> "6 x 9", …
-    // (handles 2D or 3D forms)
-    const sizeMatch = s0.match(
-      /^(\d+(?:\.\d+)?)\s*[xX]\s*(\d+(?:\.\d+)?)(?:\s*[xX]\s*(\d+(?:\.\d+)?))?$/
-    );
-    let sizeVariants = [];
-    if (sizeMatch) {
-      const parts = sizeMatch.slice(1).filter(Boolean);
-      const compact = parts.join('x');
-      const spaced = parts.join(' x ');      // e.g., "6 x 9" or "9 x 12 x 1"
-
-      sizeVariants = [s0, compact, spaced]
-        .map(v => String(v || '').trim())
-        .filter(Boolean);
+    const isPriceGroup = /^\$?\d+-\$?\d+$/.test(s);
+    let spaced;
+    if (isPriceGroup) {
+      // For price groups like "$1000-$2500", preserve the hyphen
+      spaced = s;
     } else {
-      // previous behavior: hyphens → spaces, title-case words
-      const spaced = titleCaseWords(s0.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
-      sizeVariants = [spaced];
+      // For other values, convert hyphens to spaces as before
+      spaced = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
     }
 
-    if (sizeVariants.length) {
-      for (const variant of dedupeLoose(sizeVariants)) {
-        out.push(variant);
-      }
-    }
+    if (spaced)
+      out.push(spaced);
   }
   return dedupeLoose(out);
 }
-
 
 // Prefer hyphenated params in the URL, but don't make ugly slugs when punctuation is present.
 // If value contains punctuation other than hyphen, leave it as-is (ex: "Sisal / Jute").
 function canonicalizeForUrl(v) {
   const str = String(v || '');
-  
+
   // Special handling for price groups - preserve them as-is
   const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
   if (isPriceGroup) {
     return str;
   }
-  
+
   const hasOtherPunct = /[^A-Za-z0-9\s-]/.test(str);
   // e.g., "/", "&", ","
   if (hasOtherPunct)
@@ -140,42 +122,42 @@ function _auto_buildVocabFromLastResults() {
   if (!res) return;
 
   for (const attr of AUTOFACET_ATTRS) {
-    let hits = [];
-    try {
-      // returns [{ name, count, isRefined }, ...] or throws if facet unknown
-      hits = res.getFacetValues(attr) || [];
-    } catch (_) {
-      hits = [];
-    }
-    const m = new Map();
-    for (const h of hits) {
-      if (!h || !h.name) continue;
-      m.set(_auto_norm(h.name), String(h.name));
-    }
-    _auto_vocabByAttr[attr] = m;
+  let hits = [];
+  try {
+  // returns [{ name, count, isRefined }, ...] or throws if facet unknown
+  hits = res.getFacetValues(attr) || [];
+  } catch (_) {
+  hits = [];
+  }
+  const m = new Map();
+  for (const h of hits) {
+  if (!h || !h.name) continue;
+  m.set(_auto_norm(h.name), String(h.name));
+  }
+  _auto_vocabByAttr[attr] = m;
   }
 
   // Mark ready if we got anything at all
   _auto_vocabReady = Object.values(_auto_vocabByAttr).some(m => m && m.size);
-}
+  }
 
-// Find which facet values appear in the user’s query
-function _auto_extractRefinements(query) {
+  // Find which facet values appear in the user’s query
+  function _auto_extractRefinements(query) {
   if (!_auto_vocabReady) return [];
   const nq = _auto_norm(query);
   const found = [];
   for (const attr of AUTOFACET_ATTRS) {
-    const vocab = _auto_vocabByAttr[attr];
-    if (!vocab) continue;
-    for (const [nVal, original] of vocab.entries()) {
-      if (nq.includes(nVal)) {
-        found.push({ attr, value: original, nVal });
-      }
-    }
-  }
-  // de-dupe by attr+value
-  const key = o => `${o.attr}::${o.value}`;
-  return Array.from(new Map(found.map(o => [key(o), o])).values());
+  const vocab = _auto_vocabByAttr[attr];
+  if (!vocab) continue;
+  for (const [nVal, original] of vocab.entries()) {
+  if (nq.includes(nVal)) {
+  found.push({ attr, value: original, nVal });
+}
+}
+}
+// de-dupe by attr+value
+const key = o => `${o.attr}::${o.value}`;
+return Array.from(new Map(found.map(o => [key(o), o])).values());
 }
 
 // NEW — apply once from the current query after vocab preloads
@@ -191,369 +173,369 @@ function _auto_applyFromCurrentQuery() {
 
   let changed = false;
   for (const { attr, value } of matches) {
-    const already =
-      (search.helper.state.disjunctiveFacetsRefinements?.[attr] || []).includes(value) ||
-      (search.helper.state.facetsRefinements?.[attr] || []).includes(value);
-    if (!already) {
-      search.helper.addDisjunctiveFacetRefinement(attr, value);
-      changed = true;
-    }
+  const already =
+        (search.helper.state.disjunctiveFacetsRefinements?.[attr] || []).includes(value) ||
+        (search.helper.state.facetsRefinements?.[attr] || []).includes(value);
+  if (!already) {
+  search.helper.addDisjunctiveFacetRefinement(attr, value);
+  changed = true;
+  }
   }
 
   // strip tokens so the facet remains removable
   let stripped = _auto_norm(q);
   for (const { nVal } of matches) {
-    stripped = stripped.replace(new RegExp(`\\b${nVal}\\b`, 'g'), ' ')
-                       .replace(/\s+/g, ' ')
-                       .trim();
-  }
-
-  _auto_appliedOnce = true;
-  if (changed) {
-    search.helper.setQuery(stripped).search();
-  }
+  stripped = stripped.replace(new RegExp(`\\b${nVal}\\b`, 'g'), ' ')
+.replace(/\s+/g, ' ')
+.trim();
 }
 
- 
+_auto_appliedOnce = true;
+if (changed) {
+search.helper.setQuery(stripped).search();
+}
+}
+
+
 //helper to detect refinements
 function hasAnyRefinements() {
-  const s = search.helper?.state;
-  if (!s) return false;
+const s = search.helper?.state;
+if (!s) return false;
 
-  const hasVals = obj => Object.values(obj || {}).some(v =>
-  Array.isArray(v) ? v.length > 0 : Object.keys(v || {}).length > 0
-  );
+const hasVals = obj => Object.values(obj || {}).some(v =>
+Array.isArray(v) ? v.length > 0 : Object.keys(v || {}).length > 0
+);
 
-  return (
-    hasVals(s.facetsRefinements) ||
-    hasVals(s.disjunctiveFacetsRefinements) ||
-    hasVals(s.hierarchicalFacetsRefinements) ||
-    hasVals(s.numericRefinements) ||
-    (s.tagRefinements && s.tagRefinements.length > 0)
-  );
+return (
+hasVals(s.facetsRefinements) ||
+hasVals(s.disjunctiveFacetsRefinements) ||
+hasVals(s.hierarchicalFacetsRefinements) ||
+hasVals(s.numericRefinements) ||
+(s.tagRefinements && s.tagRefinements.length > 0)
+);
 }
 
 
 // Ensure a stable Algolia Insights user token across sessions
 (function ensureInsightsUser() {
-  try {
-    const KEY = 'ALGOLIA_USER_TOKEN';
-    const LEGACY_KEY = 'alg_user';
-    // you already use this elsewhere
-    let token = localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY);
+try {
+const KEY = 'ALGOLIA_USER_TOKEN';
+const LEGACY_KEY = 'alg_user';
+// you already use this elsewhere
+let token = localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY);
 
-    if (!token) {
-      token = (window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) + '.' + Date.now();
-               }
+if (!token) {
+token = (window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) + '.' + Date.now();
+}
 
-               localStorage.setItem(KEY, token);
-               localStorage.setItem(LEGACY_KEY, token);
-               // keep your existing code working
-               if (window.aa)
-               aa('setUserToken', token);
-               // make it active for Insights
-               } catch (_) {/* no-op */
-               }
-               }
-              )();
-               // ---- Robust router for /search?... including /search/?brands=Safavieh ----
-               const ATTR_FROM_URL = {
-               // URL key     // refinementList attribute name in your widgets
-               brands: 'brands',
-               weaves: 'weaves',
-               styles: 'styles',
-               colors: 'colors',
-               sizes: 'sizes',
-               origin: 'origin',
-               materialcategory: 'materialcategory',
-               pricegroup: 'pricegroup',
-               promos: 'promos',
-               };
-               // Friendly sort slugs ↔ index names
-               const SORT_ROUTE_TO_INDEX = {
-               relevance: 'product_index',
-               price_low: 'product_index_price_asc',
-               price_high: 'product_index_price_desc',
-               newest: 'product_index_newest',
-               };
-               const SORT_INDEX_TO_ROUTE = Object.entries(SORT_ROUTE_TO_INDEX).reduce( (acc, [k,v]) => (acc[v] = k,
-                                                                                                        acc), {});
-      const search = instantsearch({
-        indexName: 'product_index',
-        searchClient,
-        routing: {
-          router: instantsearch.routers.history({
-            windowTitle({category, query}) {
-              const queryTitle = query ? `RugStudio Results for "${query}"` : 'Search';
+localStorage.setItem(KEY, token);
+localStorage.setItem(LEGACY_KEY, token);
+// keep your existing code working
+if (window.aa)
+aa('setUserToken', token);
+// make it active for Insights
+} catch (_) {/* no-op */
+}
+}
+)();
+// ---- Robust router for /search?... including /search/?brands=Safavieh ----
+const ATTR_FROM_URL = {
+// URL key     // refinementList attribute name in your widgets
+brands: 'brands',
+weaves: 'weaves',
+styles: 'styles',
+colors: 'colors',
+sizes: 'sizes',
+origin: 'origin',
+materialcategory: 'materialcategory',
+pricegroup: 'pricegroup',
+promos: 'promos',
+};
+// Friendly sort slugs ↔ index names
+const SORT_ROUTE_TO_INDEX = {
+relevance: 'product_index',
+price_low: 'product_index_price_asc',
+price_high: 'product_index_price_desc',
+newest: 'product_index_newest',
+};
+const SORT_INDEX_TO_ROUTE = Object.entries(SORT_ROUTE_TO_INDEX).reduce( (acc, [k,v]) => (acc[v] = k,
+acc), {});
+const search = instantsearch({
+indexName: 'product_index',
+searchClient,
+routing: {
+router: instantsearch.routers.history({
+windowTitle({category, query}) {
+const queryTitle = query ? `RugStudio Results for "${query}"` : 'Search';
 
-              if (category) {
-                return `${category} – ${queryTitle}`;
-              }
+if (category) {
+return `${category} – ${queryTitle}`;
+}
 
-              return queryTitle;
-            },
+return queryTitle;
+},
 
-            createURL({qsModule, location, routeState}) {
-              const baseUrl = `${location.origin}/`;
-              const categoryPath = '';
-              // your existing categoryPath logic
+createURL({qsModule, location, routeState}) {
+const baseUrl = `${location.origin}/`;
+  const categoryPath = '';
+  // your existing categoryPath logic
 
-              const queryParameters = {};
-              // Write `q` instead of `query`
-              if (routeState.query)
-                queryParameters.q = routeState.query;
+  const queryParameters = {};
+  // Write `q` instead of `query`
+  if (routeState.query)
+  queryParameters.q = routeState.query;
 
-              if (routeState.brand)
-                queryParameters.brands = routeState.brand;
-              if (routeState.weave)
-                queryParameters.weaves = routeState.weave;
-              if (routeState.style)
-                queryParameters.styles = routeState.style;
-              if (routeState.color)
-                queryParameters.colors = routeState.color;
-              if (routeState.size)
-                queryParameters.sizes = routeState.size;
-              if (routeState.origin)
-                queryParameters.origin = routeState.origin;
-              if (routeState.price)
-                queryParameters.pricegroup = routeState.price;
-              if (routeState.material)
-                queryParameters.materialcategory = routeState.material;
-              if (routeState.promo)
-                queryParameters.promos = routeState.promo;
+  if (routeState.brand)
+  queryParameters.brands = routeState.brand;
+  if (routeState.weave)
+  queryParameters.weaves = routeState.weave;
+  if (routeState.style)
+  queryParameters.styles = routeState.style;
+  if (routeState.color)
+  queryParameters.colors = routeState.color;
+  if (routeState.size)
+  queryParameters.sizes = routeState.size;
+  if (routeState.origin)
+  queryParameters.origin = routeState.origin;
+  if (routeState.price)
+  queryParameters.pricegroup = routeState.price;
+  if (routeState.material)
+  queryParameters.materialcategory = routeState.material;
+  if (routeState.promo)
+  queryParameters.promos = routeState.promo;
 
-              // include sort in the URL when selected
-              if (routeState.sortBy)
-                queryParameters.sortBy = routeState.sortBy;
-              if (routeState.sort)
-                queryParameters.sort = routeState.sort;
+  // include sort in the URL when selected
+  if (routeState.sortBy)
+  queryParameters.sortBy = routeState.sortBy;
+  if (routeState.sort)
+  queryParameters.sort = routeState.sort;
 
-              const queryString = qsModule.stringify(queryParameters, {
-                addQueryPrefix: true,
-                arrayFormat: 'repeat'
-              });
+  const queryString = qsModule.stringify(queryParameters, {
+  addQueryPrefix: true,
+        arrayFormat: 'repeat'
+});
 
-              return `${baseUrl}search/${categoryPath}${queryString}`;
-            },
+return `${baseUrl}search/${categoryPath}${queryString}`;
+},
 
-            parseURL({qsModule, location}) {
-              const pathnameMatches = location.pathname.match(/search\/(.*?)\/?$/);
-              const category = getCategoryName((pathnameMatches && pathnameMatches[1]) || '');
+  parseURL({qsModule, location}) {
+    const pathnameMatches = location.pathname.match(/search\/(.*?)\/?$/);
+    const category = getCategoryName((pathnameMatches && pathnameMatches[1]) || '');
 
-              // Read `q` (fallback to `query` for safety)
-              const params = qsModule.parse(location.search.slice(1));
-              const rawQ = params.q ?? params.query ?? '';
-              const theQuery = Array.isArray(rawQ) ? rawQ[0] : rawQ;
+    // Read `q` (fallback to `query` for safety)
+    const params = qsModule.parse(location.search.slice(1));
+    const rawQ = params.q ?? params.query ?? '';
+    const theQuery = Array.isArray(rawQ) ? rawQ[0] : rawQ;
 
-              const brands = params.brands ?? [];
-              const weaves = params.weaves ?? [];
-              const styles = params.styles ?? [];
-              const colors = params.colors ?? [];
-              const sizes = params.sizes ?? [];
-              const origin = params.origin ?? [];
-              const pricegroup = params.pricegroup ?? [];
-              const materialcategory = params.materialcategory ?? [];
-              const promos = params.promos ?? [];
+    const brands = params.brands ?? [];
+    const weaves = params.weaves ?? [];
+    const styles = params.styles ?? [];
+    const colors = params.colors ?? [];
+    const sizes = params.sizes ?? [];
+    const origin = params.origin ?? [];
+    const pricegroup = params.pricegroup ?? [];
+    const materialcategory = params.materialcategory ?? [];
+    const promos = params.promos ?? [];
 
-              // Accept canonical ?sortBy=index as well as a friendly ?sort=newest
-              const sort = params.sort || (params.sortBy ? SORT_INDEX_TO_ROUTE[params.sortBy] : undefined);
+    // Accept canonical ?sortBy=index as well as a friendly ?sort=newest
+    const sort = params.sort || (params.sortBy ? SORT_INDEX_TO_ROUTE[params.sortBy] : undefined);
 
-              const arr = v => (Array.isArray(v) ? v : [v].filter(Boolean));
+    const arr = v => (Array.isArray(v) ? v : [v].filter(Boolean));
 
-              return {
-                query: theQuery,
-                page: params.page,
-                brands: normalizeFromUrlSingle(brands),
-                weaves: normalizeFromUrlSingle(weaves),
-                styles: normalizeFromUrlSingle(styles),
-                sizes: normalizeFromUrlSingle(sizes),
-                colors: normalizeFromUrlSingle(colors),
-                origin: normalizeFromUrlSingle(origin),
-                price: normalizeFromUrlSingle(pricegroup),
-                material: normalizeFromUrlSingle(materialcategory),
-                promo: normalizeFromUrlSingle(promos),
-                sort,
-              };
-            }
-          }),
-          stateMapping: {
-            stateToRoute(uiState) {
-              const s = uiState.product_index || {};
-              const rl = s.refinementList || {};
+    return {
+      query: theQuery,
+      page: params.page,
+      brands: normalizeFromUrlSingle(brands),
+      weaves: normalizeFromUrlSingle(weaves),
+      styles: normalizeFromUrlSingle(styles),
+      sizes: normalizeFromUrlSingle(sizes),
+      colors: normalizeFromUrlSingle(colors),
+      origin: normalizeFromUrlSingle(origin),
+      price: normalizeFromUrlSingle(pricegroup),
+      material: normalizeFromUrlSingle(materialcategory),
+      promo: normalizeFromUrlSingle(promos),
+      sort,
+    };
+  }
+}),
+  stateMapping: {
+    stateToRoute(uiState) {
+      const s = uiState.product_index || {};
+      const rl = s.refinementList || {};
 
-              return {
-                // keep using `query` here; your createURL already writes it to `q`
-                query: s.query || '',
-                page: s.page || 1,
-                sort: SORT_INDEX_TO_ROUTE[s.sortBy],
-                // singular keys — these are what your existing createURL expects
-                brand: canonicalizeArrayForUrl(rl.manufacturer || []),
-                weave: canonicalizeArrayForUrl(rl['attributes.Weave'] || []),
-                style: canonicalizeArrayForUrl(rl['attributes.Styles'] || []),
-                size: canonicalizeArrayForUrl(rl['attributes.Size'] || []),
-                price: canonicalizeArrayForUrl(rl['attributes.PriceGroup'] || []),
-                promo: canonicalizeArrayForUrl(rl['attributes.Promotion'] || []),
-                color: canonicalizeArrayForUrl(rl['attributes.Colors'] || []),
-                origin: canonicalizeArrayForUrl(rl['attributes.Origin'] || []),
-                material: canonicalizeArrayForUrl(rl['attributes.MaterialCategory'] || []),
-              };
-            },
+      return {
+        // keep using `query` here; your createURL already writes it to `q`
+        query: s.query || '',
+        page: s.page || 1,
+        sort: SORT_INDEX_TO_ROUTE[s.sortBy],
+        // singular keys — these are what your existing createURL expects
+        brand: canonicalizeArrayForUrl(rl.manufacturer || []),
+        weave: canonicalizeArrayForUrl(rl['attributes.Weave'] || []),
+        style: canonicalizeArrayForUrl(rl['attributes.Styles'] || []),
+        size: canonicalizeArrayForUrl(rl['attributes.Size'] || []),
+        price: canonicalizeArrayForUrl(rl['attributes.PriceGroup'] || []),
+        promo: canonicalizeArrayForUrl(rl['attributes.Promotion'] || []),
+        color: canonicalizeArrayForUrl(rl['attributes.Colors'] || []),
+        origin: canonicalizeArrayForUrl(rl['attributes.Origin'] || []),
+        material: canonicalizeArrayForUrl(rl['attributes.MaterialCategory'] || []),
+      };
+    },
 
-            routeToState(route) {
-              return {
-                product_index: {
-                  // parseURL gives you `query`; createURL writes it to `q`
-                  query: route.query || '',
-                  page: route.page || 1,
-                  sortBy: route.sort ? SORT_ROUTE_TO_INDEX[route.sort] : undefined,
-                  // map URL params → actual attribute names used by your widgets
-                  refinementList: {
-                    manufacturer: normalizeFromUrlSingle(route.brands || route.brand || []),
-                    'attributes.Weave': normalizeFromUrlSingle(route.weaves || route.weave || []),
-                    'attributes.Styles': normalizeFromUrlSingle(route.styles || route.style || []),
-                    'attributes.Size': normalizeFromUrlSingle(route.sizes || route.size || []),
-                    'attributes.PriceGroup': normalizeFromUrlSingle(route.price || route.pricegroup || []),
-                    'attributes.Promotion': normalizeFromUrlSingle(route.promo || route.promos || []),
-                    'attributes.Colors': normalizeFromUrlSingle(route.colors || route.color || []),
-                    'attributes.Origin': normalizeFromUrlSingle(route.origin || []),
-                    'attributes.MaterialCategory': normalizeFromUrlSingle(route.material || route.materialcategory || []),
-                  },
-                },
-              };
+      routeToState(route) {
+        return {
+          product_index: {
+            // parseURL gives you `query`; createURL writes it to `q`
+            query: route.query || '',
+            page: route.page || 1,
+            sortBy: route.sort ? SORT_ROUTE_TO_INDEX[route.sort] : undefined,
+            // map URL params → actual attribute names used by your widgets
+            refinementList: {
+              manufacturer: normalizeFromUrlSingle(route.brands || route.brand || []),
+              'attributes.Weave': normalizeFromUrlSingle(route.weaves || route.weave || []),
+              'attributes.Styles': normalizeFromUrlSingle(route.styles || route.style || []),
+              'attributes.Size': normalizeFromUrlSingle(route.sizes || route.size || []),
+              'attributes.PriceGroup': normalizeFromUrlSingle(route.price || route.pricegroup || []),
+              'attributes.Promotion': normalizeFromUrlSingle(route.promo || route.promos || []),
+              'attributes.Colors': normalizeFromUrlSingle(route.colors || route.color || []),
+              'attributes.Origin': normalizeFromUrlSingle(route.origin || []),
+              'attributes.MaterialCategory': normalizeFromUrlSingle(route.material || route.materialcategory || []),
             },
           },
-        },
+        };
+      },
+  },
+},
 
-        insights: true,
+  insights: true,
 
-        /* Keep the first query in sync */
-        initialUiState: {
-          product_index: {
-            query: initialQuery
-          }
-        }
-      });
-
-      const {infiniteHits} = instantsearch.widgets;
-      const {createInfiniteHitsSessionStorageCache} = instantsearch;
-      const sessionStorageCache = createInfiniteHitsSessionStorageCache();
-
-      const rugPadsExclude = 'NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad"' + ' AND NOT categories.name:"Rugstudio-Rug-Pads"';
-      //const customStats = connectStats(renderStats);
-
-      function _taggedTemplateLiteral(strings, raw) {
-        return raw || (raw = strings.slice(0)),
-          Object.freeze(Object.defineProperties(strings, {
-          raw: {
-            value: Object.freeze(raw)
-          }
-        }))
+    /* Keep the first query in sync */
+    initialUiState: {
+      product_index: {
+        query: initialQuery
       }
-      function cleanTitle(title) {
-        return title.replace(/(Area Rug(?: Clearance| Last Chance)?\| Size\| )/, ' ').trim();
-      }
-      function truncateText(text, maxLength) {
-        if (!text)
-          return '';
-        return text.length > maxLength ? text.substring(0, maxLength).trim() + '…' : text;
-      }
+    }
+});
 
-      let showChildPrices = false;
+const {infiniteHits} = instantsearch.widgets;
+const {createInfiniteHitsSessionStorageCache} = instantsearch;
+const sessionStorageCache = createInfiniteHitsSessionStorageCache();
 
-      search.addWidgets([instantsearch.widgets.searchBox({
-        container: '#searchbox',
-        placeholder: 'Find the perfect rug',
-        autofocus: true,
-        showSubmit: false,
-        searchAsYouType: true,
-        queryHook(query, refine) {
-          const normalized = query.trim().toLowerCase();
-        
-          // Your existing rug-pad redirect logic
-          if (['rug pad', 'rug pads', 'jade pad', 'msm', 'cushion grip', 'magic stop', 'anchor pad', 'deluxe pad', 'non slip pad', 'non-slip pads'].includes(normalized)) {
-            window.location.href = '/rugstudio-rug-pads.html';
-            return;
-          }
-        
-          // Prevent recursive loop
-          if (_auto_inHook) {
-            _auto_inHook = false;
-            return refine(query);
-          }
-        
-          // If vocab not ready yet, just run the search
-          if (!_auto_vocabReady || !query) {
-            return refine(query);
-          }
-        
-          // Find facet values inside the query
-          const matches = _auto_extractRefinements(query);
-        
-          if (matches.length) {
-            // Apply as real refinements (so the boxes are checked and removable)
-            let changed = false;
-            for (const { attr, value } of matches) {
-              const already =
-                (search.helper.state.disjunctiveFacetsRefinements?.[attr] || []).includes(value) ||
-                (search.helper.state.facetsRefinements?.[attr] || []).includes(value);
-              if (!already) {
-                // All six attributes are on refinementList widgets (disjunctive)
-                search.helper.addDisjunctiveFacetRefinement(attr, value);
-                changed = true;
-              }
-            }
-        
-            // Strip the matched tokens out of the query so they don’t re-apply
-            let stripped = _auto_norm(query);
-            // remove whole-token occurrences; keep simple for now
-            for (const { nVal } of matches) {
-              stripped = stripped.replace(new RegExp(`\\b${nVal}\\b`, 'g'), ' ').replace(/\s+/g, ' ').trim();
-            }
-        
-            _auto_inHook = true;
-            // Use the stripped query; the applied facets now show up as checked pills/boxes
-            return refine(stripped);
-          }
-        
-          // No auto matches; continue as normal
-          refine(query);
-        }
-      }), instantsearch.widgets.stats({
-        container: '#stats',
-        templates: {
-          text(data, {html}) {
-            let count = '';
+const rugPadsExclude = 'NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad"' + ' AND NOT categories.name:"Rugstudio-Rug-Pads"';
+//const customStats = connectStats(renderStats);
 
-            if (data.hasManyResults) {
-              const formattedHits = data.nbHits.toLocaleString('en-US');
-              count += `${formattedHits} results`;
-            } else if (data.hasOneResult) {
-              count += `1 result`;
-            } else {
-              count += `no result`;
-            }
-            return html`<span>${count}</span>`;
-          }
-        }
-      }), instantsearch.widgets.currentRefinements({
-        container: '#current-refinements',
+function _taggedTemplateLiteral(strings, raw) {
+  return raw || (raw = strings.slice(0)),
+    Object.freeze(Object.defineProperties(strings, {
+    raw: {
+      value: Object.freeze(raw)
+    }
+  }))
+}
+function cleanTitle(title) {
+  return title.replace(/(Area Rug(?: Clearance| Last Chance)?\| Size\| )/, ' ').trim();
+}
+function truncateText(text, maxLength) {
+  if (!text)
+    return '';
+  return text.length > maxLength ? text.substring(0, maxLength).trim() + '…' : text;
+}
 
-        /* show ONLY the facets you expose elsewhere */
-        includedAttributes: ['manufacturer', 'attributes.Styles', 'attributes.Size', 'attributes.PriceGroup', 'attributes.MaterialCategory', 'attributes.Colors', 'attributes.Weave', 'attributes.Promotion'],
+let showChildPrices = false;
 
-        /* optional: rename long attribute paths for nicer labels */
-        transformItems(items) {
-          return items.map(item => ({
-            ...item,
-            label: item.label // “attributes.Size” → “Size”
-            .replace(/^manufacturer$/, 'Brand').replace(/^attributes\./, '').replace(/([A-Z])/g, ' $1').trim()
-          }));
-        },
+search.addWidgets([instantsearch.widgets.searchBox({
+  container: '#searchbox',
+  placeholder: 'Find the perfect rug',
+  autofocus: true,
+  showSubmit: false,
+  searchAsYouType: true,
+  queryHook(query, refine) {
+    const normalized = query.trim().toLowerCase();
 
-        /* optional: tweak the pill template */
-        templates: {
-          item({label, refinements, refine}, {html}) {
-            return html`
+    // Your existing rug-pad redirect logic
+    if (['rug pad', 'rug pads', 'jade pad', 'msm', 'cushion grip', 'magic stop', 'anchor pad', 'deluxe pad', 'non slip pad', 'non-slip pads'].includes(normalized)) {
+      window.location.href = '/rugstudio-rug-pads.html';
+      return;
+    }
+
+    // Prevent recursive loop
+    if (_auto_inHook) {
+      _auto_inHook = false;
+      return refine(query);
+    }
+
+    // If vocab not ready yet, just run the search
+    if (!_auto_vocabReady || !query) {
+      return refine(query);
+    }
+
+    // Find facet values inside the query
+    const matches = _auto_extractRefinements(query);
+
+    if (matches.length) {
+      // Apply as real refinements (so the boxes are checked and removable)
+      let changed = false;
+      for (const { attr, value } of matches) {
+        const already =
+              (search.helper.state.disjunctiveFacetsRefinements?.[attr] || []).includes(value) ||
+               (search.helper.state.facetsRefinements?.[attr] || []).includes(value);
+               if (!already) {
+               // All six attributes are on refinementList widgets (disjunctive)
+               search.helper.addDisjunctiveFacetRefinement(attr, value);
+               changed = true;
+               }
+               }
+
+               // Strip the matched tokens out of the query so they don’t re-apply
+               let stripped = _auto_norm(query);
+               // remove whole-token occurrences; keep simple for now
+               for (const { nVal } of matches) {
+               stripped = stripped.replace(new RegExp(`\\b${nVal}\\b`, 'g'), ' ').replace(/\s+/g, ' ').trim();
+}
+
+_auto_inHook = true;
+// Use the stripped query; the applied facets now show up as checked pills/boxes
+return refine(stripped);
+}
+
+// No auto matches; continue as normal
+refine(query);
+}
+}), instantsearch.widgets.stats({
+container: '#stats',
+templates: {
+text(data, {html}) {
+let count = '';
+
+if (data.hasManyResults) {
+const formattedHits = data.nbHits.toLocaleString('en-US');
+count += `${formattedHits} results`;
+} else if (data.hasOneResult) {
+count += `1 result`;
+} else {
+count += `no result`;
+}
+return html`<span>${count}</span>`;
+               }
+               }
+               }), instantsearch.widgets.currentRefinements({
+               container: '#current-refinements',
+
+               /* show ONLY the facets you expose elsewhere */
+               includedAttributes: ['manufacturer', 'attributes.Styles', 'attributes.Size', 'attributes.PriceGroup', 'attributes.MaterialCategory', 'attributes.Colors', 'attributes.Weave', 'attributes.Promotion'],
+
+               /* optional: rename long attribute paths for nicer labels */
+               transformItems(items) {
+                return items.map(item => ({
+                  ...item,
+                  label: item.label // “attributes.Size” → “Size”
+                  .replace(/^manufacturer$/, 'Brand').replace(/^attributes\./, '').replace(/([A-Z])/g, ' $1').trim()
+                }));
+              },
+
+                /* optional: tweak the pill template */
+                templates: {
+                  item({label, refinements, refine}, {html}) {
+                    return html`
 <span class="refinement-label">${label}</span>
 ${refinements.map(refinement => html`
 <span class="refinement-pill">
@@ -566,8 +548,8 @@ onClick=${ () => refine(refinement)}
 </span>
 `)}
 `;
-          }
-        }
+                  }
+                }
       }), instantsearch.widgets.sortBy({
         container: '#sort-by',
         items: [{
@@ -621,7 +603,7 @@ onClick=${ () => refine(refinement)}
             if (!currentIndex) {
               currentIndex = 'product_index';
             }
-            
+
             // console.log('[template] Hit index info:', {
             //   hitIndexName: hit.__indexName,
             //   currentIndex: currentIndex,
@@ -663,7 +645,7 @@ ${showChildPrices && !isParent && hit.sale_price ? html`<div class="hitPrice">$$
           //   query: results.query,
           //   trending: trendingHits.length
           // });
-          
+
           // Add the correct index name to each hit
           // Try to get the index from results.index first, then fall back to sortBy
           const currentIndex = results.index || search.helper.state.sortBy || 'product_index';
@@ -672,12 +654,12 @@ ${showChildPrices && !isParent && hit.sale_price ? html`<div class="hitPrice">$$
           //   currentIndex: currentIndex,
           //   resultsIndex: results.index
           // });
-          
+
           const itemsWithIndex = items.map(hit => ({
             ...hit,
             __indexName: currentIndex
           }));
-          
+
           // Only pad on first page, empty query, and NO refinements
           const isFirstPage   = results.page === 0;
           const isEmptyQuery  = (results.query ?? '').trim() === '';
@@ -744,7 +726,7 @@ ${showChildPrices && !isParent && hit.sale_price ? html`<div class="hitPrice">$$
         attribute: 'attributes.Size',
         showMore: true,
         limit: 5,
-        showMoreLimit: 32,
+        showMoreLimit: 200,
         templates: {
           showMoreText: ({isShowingMore}) => isShowingMore ? '<span class="facetshowless"></span>Show Less' : '<span class="facetshowmore"></span>Show more'
         },
@@ -825,20 +807,20 @@ let trendingHits = [];
 let trendingIDs = new Set();
 
 searchClient.getRecommendations({
-  requests: [{
-    model: 'trending-items',
-    threshold: 60,
-    indexName: 'product_index',
-    maxRecommendations: TRENDING_N,
-    queryParameters: {
-      filters: 'custom_flag1=1 AND hide=0 AND NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad" AND NOT categories.name:"Rugstudio-Rug-Pads" AND NOT manufacturer:"Solo Rugs" AND NOT attributes.Promotion:"LAST CHANCE"'
-    }
-  }]
+requests: [{
+model: 'trending-items',
+threshold: 60,
+indexName: 'product_index',
+maxRecommendations: TRENDING_N,
+queryParameters: {
+filters: 'custom_flag1=1 AND hide=0 AND NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad" AND NOT categories.name:"Rugstudio-Rug-Pads" AND NOT manufacturer:"Solo Rugs" AND NOT attributes.Promotion:"LAST CHANCE"'
+}
+}]
 }).then(({ results }) => {
-  trendingHits = results?.[0]?.hits ?? [];
-  trendingIDs = new Set(trendingHits.map(h => h.objectID));
-  // console.log('Trending blend candidates:', trendingHits.length, trendingHits);
-  search?.refresh?.();
+trendingHits = results?.[0]?.hits ?? [];
+trendingIDs = new Set(trendingHits.map(h => h.objectID));
+// console.log('Trending blend candidates:', trendingHits.length, trendingHits);
+search?.refresh?.();
 }
 ).catch(console.error);
 search.start();
@@ -853,11 +835,10 @@ const isChildSku = /^\d+x\d+$/i.test(q);
 
 const sizeRefinements = search.helper.getRefinements('attributes.Size');
 const autoSizeFromRule = search.renderState?.product_index?.results?.explain?.params?.rules?.facetFilters?.some(f => f.startsWith('attributes.Size:')) || false;
-const urlParams = new URLSearchParams(location.search);
-const hasSizeParam = urlParams.has('sizes') || urlParams.has('size');
- 
+
+
 // update the existing flag (DON’T redeclare)
-showChildPrices = hasSizeParam || sizeRefinements.length > 0 || autoSizeFromRule || isChildSku;
+showChildPrices = sizeRefinements.length > 0 || autoSizeFromRule || isChildSku;
 
 const baseFilters = ['hide = 0'];
 const parentFilter = 'custom_flag1 = 1';
@@ -938,8 +919,8 @@ return html`
                                                <div class="titlewrapper"><h2 class="trending-title">${displayTitle}</h2></div>
                                                <div class="ByMfgr">By ${reco.manufacturer || ''}</div>
                                                ${showPrice ? html`<div class="hitPrice">$${Number(reco.sale_price).toFixed(2)}</div>` : ''}
-                         </a></div>
-                         `;
+        </a></div>
+          `;
 },
 },
 transformItems(items) {
