@@ -879,6 +879,7 @@ trendingIDs = new Set(trendingHits.map(h => h.objectID));
 .finally(() => { search.start(); });
 
 let showingChildren = false;
+let trendingWidget = null;
 
 search.on('render', () => {
 const q = (search.helper.state.query || '').trim();
@@ -908,57 +909,41 @@ if (wantChildren !== showingChildren || search.helper.state.filters !== newFilte
 
 const results = search.renderState?.product_index?.infiniteHits?.results;
 const hits = results?.hits || [];
-const queryID = results?.queryID;
-const noResults = document.querySelector('#infinite-hits .ais-InfiniteHits--empty');
+const hasQuery = Boolean((search.helper.state.query || '').trim());
+const hasHits = hits.length > 0;
+const shouldShowTrending = !hasHits || !hasQuery;
 
-//console.log("results " + results);
-//console.log("hits " + hits);
-//console.log("queryID " + queryID);
+if (hasHits) {
+  aa('viewedObjectIDs', {
+    eventName: 'Hits Viewed',
+    index: search.helper.state.sortBy || 'product_index',
+    objectIDs: hits.map(hit => hit.objectID),
+  });
+}
 
-//if (queryID) {
-aa('viewedObjectIDs', {
-eventName: 'Hits Viewed',
-index: search.helper.state.sortBy || 'product_index',
-objectIDs: hits.map(hit => hit.objectID),
-//queryID: queryID, //queryID isn't required in Hits Viewed
-//userToken: localStorage.alg_user || 'anonymous'
-});
-//}
+const trendingContainer = document.querySelector('#trending-items');
+if (trendingContainer) {
+  if (shouldShowTrending) {
+    if (!trendingWidget) {
+      const {trendingItems} = instantsearch.widgets;
+      trendingWidget = trendingItems({
+        container: '#trending-items',
+        limit: 8,
+        queryParameters: {
+          filters: 'hide=0 AND custom_flag1=1 AND NOT categories.name:"Rug Pads"',
+          clickAnalytics: true,
+        },
+        templates: {
+          item(reco, {html}) {
+            const rawImg = reco.image || reco.image_url || (reco.images && reco.images[0] && reco.images[0].url);
+            const resizedImage = rawImg ? rawImg.replace('f_auto%2Cq_auto', 'if_tar_gt_1.5/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:15/if_else/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:1/if_end').replace('/s_', '/l_') : null;
+            const isParent = reco.custom_flag1 === 1;
+            const titleText = cleanTitle(reco.title || reco.name || `Item ${reco.objectID}`);
+            const displayTitle = isParent ? truncateText(titleText, 40) : titleText;
+            const showPrice = showChildPrices && !isParent && reco.sale_price;
 
-if (noResults) {
-const container = document.querySelector('#trending-items');
-if (!container)
-return;
-
-// prevent multiple mounts across renders
-if (!container.dataset.widgetMounted) {
-container.dataset.widgetMounted = '1';
-
-const {trendingItems} = instantsearch.widgets;
-
-search.addWidgets([trendingItems({
-container: '#trending-items',
-// show global trends; limit to 8
-limit: 8,
-// keep visibility rules aligned with your main search
-queryParameters: {
-filters: 'hide=0 AND custom_flag1=1 AND NOT categories.name:"Rug Pads"',
-clickAnalytics: true,
-},
-templates: {
-// match your image + title logic (lines ~302–333)
-item(reco, {html}) {
-const rawImg = reco.image || reco.image_url || (reco.images && reco.images[0] && reco.images[0].url);
-
-const resizedImage = rawImg ? rawImg.replace('f_auto%2Cq_auto', 'if_tar_gt_1.5/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:15/if_else/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:1/if_end').replace('/s_', '/l_') : null;
-
-const isParent = reco.custom_flag1 === 1;
-const titleText = cleanTitle(reco.title || reco.name || `Item ${reco.objectID}`);
-const displayTitle = isParent ? truncateText(titleText, 40) : titleText;
-const showPrice = showChildPrices && !isParent && reco.sale_price;
-
-return html`
-  <div class="hit-card"><a class="trending-item" href="${reco.url || '#'}" 
+            return html`
+  <div class="hit-card"><a class="trending-item" href="${reco.url || '#'}"
   rel="noopener"onClick="${ () => {
   if (window.aa) {
     aa('clickedObjectIDs', {
@@ -975,26 +960,42 @@ return html`
                                                ${showPrice ? html`<div class="hitPrice">$${Number(reco.sale_price).toFixed(2)}</div>` : ''}
         </a></div>
           `;
-},
-},
-transformItems(items) {
-// hide the section if the model is empty
-if (!items || !items.length) {
-const sec = document.querySelector('#trending-section');
-if (sec)
-sec.style.display = 'none';
-}
-return items;
-},
-}), ]);
+          },
+        },
+        transformItems(items) {
+          if (!Array.isArray(items) || !items.length) {
+            const sec = document.querySelector('#trending-section');
+            if (sec)
+              sec.style.display = 'none';
+            return items || [];
+          }
 
-// Mount the newly added widget immediately
-search.refresh();
-}
+          const sec = document.querySelector('#trending-section');
+          if (sec)
+            sec.style.display = '';
+
+          return items.filter(reco => reco && reco.objectID);
+        },
+      });
+
+      search.addWidgets([trendingWidget]);
+      search.refresh();
+
+      const emptyTitle = document.querySelector('.ais-InfiniteHits--empty h1');
+      if (emptyTitle)
+        emptyTitle.textContent = "We didn't find any results";
+    }
+  } else if (trendingWidget) {
+    search.removeWidgets([trendingWidget]);
+    trendingWidget = null;
+    trendingContainer.innerHTML = '';
+    const sec = document.querySelector('#trending-section');
+    if (sec)
+      sec.style.display = 'none';
+  }
 }
 
-}
-);
+});
 
 document.addEventListener('DOMContentLoaded', () => {
 const observer = new MutationObserver( () => {
