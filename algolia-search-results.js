@@ -53,10 +53,17 @@ function normalizeFromUrlSingle(valueOrArray) {
   for (const raw of values) {
     if (!raw)
       continue;
-    const s = String(raw).replace(/\+/g, ' ').trim();
+    // Don't convert + to space - preserve plus signs in facet values like "19'+"
+    const s = String(raw).trim();
 
     // Special handling for price groups - preserve hyphens for price ranges
     if (/^\$?\d+-\$?\d+$/.test(s)) {
+      out.push(s);
+      continue;
+    }
+
+    // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
+    if (/.*\d+['"]?-\d+['"]?\+?$/.test(s)) {
       out.push(s);
       continue;
     }
@@ -120,6 +127,12 @@ function canonicalizeForUrl(v) {
   // Special handling for price groups - preserve them as-is
   const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
   if (isPriceGroup) {
+    return str;
+  }
+
+  // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
+  const isSizeRange = /.*\d+['"]?-\d+['"]?\+?$/.test(str);
+  if (isSizeRange) {
     return str;
   }
 
