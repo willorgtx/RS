@@ -908,6 +908,65 @@ label.remove-payment input, label.image-input-replace input { position: absolute
 /* [/HTML] */
 
 /* [Carousel] */
+.alg-carousel {
+  position: relative;
+  overflow: hidden;
+}
+
+.ais-Carousel-list {
+  display: flex !important;
+  flex-direction: row !important;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  transition: transform 0.3s ease;
+}
+
+.ais-Carousel-item {
+  flex: 0 0 auto;
+  margin-right: 15px;
+  width: 170px;
+}
+
+.ais-Carousel-item:last-child {
+  margin-right: 0;
+}
+
+/* Navigation buttons */
+.ais-Carousel-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+  z-index: 10;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ais-Carousel-button--previous {
+  left: 10px;
+}
+
+.ais-Carousel-button--next {
+  right: 10px;
+}
+
+.ais-Carousel-button:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.ais-Carousel-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* [/Carousel] */
 
