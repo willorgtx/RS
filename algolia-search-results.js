@@ -68,6 +68,12 @@ function normalizeFromUrlSingle(valueOrArray) {
       continue;
     }
 
+    // Special handling for specific size values that should keep their hyphens
+    if (/^(Runners|Square|Round|Octagon|Oval)-(Grand|Wide|Small)$/.test(s)) {
+      out.push(s);
+      continue;
+    }
+
     const variants = new Set();
     const base = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
     if (base)
@@ -85,12 +91,9 @@ function normalizeFromUrlSingle(valueOrArray) {
       if (normalizedParts.length) {
         const spaced = joinParts(' x ');
         const spacedUpper = joinParts(' X ');
-        if (spaced)
-          variants.add(spaced);
-        if (spacedUpper)
-          variants.add(spacedUpper);
-        if (collapsed)
-          variants.add(collapsed);
+        if (spaced) variants.add(spaced);
+        if (spacedUpper) variants.add(spacedUpper);
+        if (collapsed) variants.add(collapsed);
 
         const hasQuote = normalizedParts.some(part => /['"′″]/.test(part));
         const isPlainNumber = part => /^\d+(?:\s*\d\/\d)?$/.test(part);
@@ -98,126 +101,130 @@ function normalizeFromUrlSingle(valueOrArray) {
           const withFeetParts = normalizedParts.map(part => `${part}'`);
           const withFeet = withFeetParts.join(' x ');
           const withFeetUpper = withFeetParts.join(' X ');
-          if (withFeet)
-            variants.add(withFeet);
-          if (withFeetUpper)
-            variants.add(withFeetUpper);
+          if (withFeet) variants.add(withFeet);
+          if (withFeetUpper) variants.add(withFeetUpper);
         }
       }
     }
 
     // Keep the raw trimmed value as a fallback
     if (s)
-      variants.add(s);
+    variants.add(s);
 
     for (const v of variants) {
       const finalValue = String(v).replace(/\s+/g, ' ').trim();
       if (finalValue)
-        out.push(finalValue);
+      out.push(finalValue);
     }
   }
-  return dedupeLoose(out);
+    return dedupeLoose(out);
 }
 
-// Prefer hyphenated params in the URL, but don't make ugly slugs when punctuation is present.
-// If value contains punctuation other than hyphen, leave it as-is (ex: "Sisal / Jute").
-function canonicalizeForUrl(v) {
-  const str = String(v || '');
+    // Prefer hyphenated params in the URL, but don't make ugly slugs when punctuation is present.
+    // If value contains punctuation other than hyphen, leave it as-is (ex: "Sisal / Jute").
+    function canonicalizeForUrl(v) {
+    const str = String(v || '');
 
-  // Special handling for price groups - preserve them as-is
-  const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
-  if (isPriceGroup) {
+    // Special handling for price groups - preserve them as-is
+    const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
+    if (isPriceGroup) {
+      return str;
+    }
+
+    // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
+    const isSizeRange = /.*\d+['"]?-\d+['"]?\+?$/.test(str);
+    if (isSizeRange) {
+      return str;
+    }
+
+    // Special handling for specific size values that should keep their hyphens
+    const specificSizesWithHyphens = /^(Runners|Square|Round|Octagon|Oval)-(Grand|Wide|Small)$/.test(str);
+    if (specificSizesWithHyphens) {
     return str;
-  }
+    }
 
-  // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
-  const isSizeRange = /.*\d+['"]?-\d+['"]?\+?$/.test(str);
-  if (isSizeRange) {
+    const hasOtherPunct = /[^A-Za-z0-9\s-]/.test(str);
+    // e.g., "/", "&", ","
+    if (hasOtherPunct)
     return str;
+    // keep readable (e.g., "Sisal / Jute")
+    return str.trim().replace(/\s+/g, '-').replace(/--+/g, '-');
+    }
+
+    function canonicalizeArrayForUrl(arr) {
+    // dedupe before and after canonicalization
+    const a = dedupeLoose(arr || []).map(canonicalizeForUrl);
+    return dedupeLoose(a);
   }
 
-  const hasOtherPunct = /[^A-Za-z0-9\s-]/.test(str);
-  // e.g., "/", "&", ","
-  if (hasOtherPunct)
-    return str;
-  // keep readable (e.g., "Sisal / Jute")
-  return str.trim().replace(/\s+/g, '-').replace(/--+/g, '-');
-}
+  /* 1 — grab the query string (?q=blue%20rug) */
+  const params = new URLSearchParams(window.location.search);
+  const initialQuery = params.get('q') || '';
 
-function canonicalizeArrayForUrl(arr) {
-  // dedupe before and after canonicalization
-  const a = dedupeLoose(arr || []).map(canonicalizeForUrl);
-  return dedupeLoose(a);
-}
+  const {liteClient: algoliasearch} = window['algoliasearch/lite'];
+  const searchClient = algoliasearch('6Z7PXO4P9V', 'cf6feac06fa1069b5dd3ed1b02b7fbcf');
 
-/* 1 — grab the query string (?q=blue%20rug) */
-const params = new URLSearchParams(window.location.search);
-const initialQuery = params.get('q') || '';
-
-const {liteClient: algoliasearch} = window['algoliasearch/lite'];
-const searchClient = algoliasearch('6Z7PXO4P9V', 'cf6feac06fa1069b5dd3ed1b02b7fbcf');
-
-// === Auto-facet from query — config & helpers ===
-const AUTOFACET_ATTRS = [
-  'attributes.Colors',
-  'attributes.MaterialCategory',
-  'attributes.Origin',
-  'attributes.Size',
-  'attributes.Styles',
-  'manufacturer',
-  'attributes.Weave',
-];
-const _auto_vocabByAttr = {};       // { attr -> Map<normVal -> originalFacetValue> }
-let   _auto_vocabReady   = false;   // gate so we don't loop while fetching
-let   _auto_inHook       = false;   // loop guard in queryHook
+  // === Auto-facet from query — config & helpers ===
+  const AUTOFACET_ATTRS = [
+    'attributes.Colors',
+    'attributes.MaterialCategory',
+    'attributes.Origin',
+    'attributes.Size',
+    'attributes.Styles',
+    'manufacturer',
+    'attributes.Weave',
+  ];
+  const _auto_vocabByAttr = {};       // { attr -> Map<normVal -> originalFacetValue> }
+  let   _auto_vocabReady   = false;   // gate so we don't loop while fetching
+  let   _auto_inHook       = false;   // loop guard in queryHook
 
 
-// Normalizer: “6 x 9” / “6×9” → “6x9”, trims & lowercases, collapses spaces
-function _auto_norm(s) {
-  return String(s || '')
-    .toLowerCase()
-    .replace(/[’']/g, '')     // feet/quote marks
-    .replace(/×/g, 'x')       // unicode ×
-    .replace(/\s*x\s*/g, 'x') // tight sizes
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-// Build the facet vocab from the latest results instead of SFFV
-function _auto_buildVocabFromLastResults() {
-  const res = search?.helper?.lastResults;
-  if (!res) return;
-
-  for (const attr of AUTOFACET_ATTRS) {
-  let hits = [];
-  try {
-  // returns [{ name, count, isRefined }, ...] or throws if facet unknown
-  hits = res.getFacetValues(attr) || [];
-  } catch (_) {
-  hits = [];
+  // Normalizer: “6 x 9” / “6×9” → “6x9”, trims & lowercases, collapses spaces
+  function _auto_norm(s) {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/[’']/g, '')     // feet/quote marks
+      .replace(/×/g, 'x')       // unicode ×
+      .replace(/\s*x\s*/g, 'x') // tight sizes
+      .replace(/\s+/g, ' ')
+      .trim();
   }
-  const m = new Map();
-  for (const h of hits) {
-  if (!h || !h.name) continue;
-  m.set(_auto_norm(h.name), String(h.name));
-  }
-  _auto_vocabByAttr[attr] = m;
-  }
+  // Build the facet vocab from the latest results instead of SFFV
+  function _auto_buildVocabFromLastResults() {
+    const res = search?.helper?.lastResults;
+    if (!res) return;
 
-  // Mark ready if we got anything at all
-  _auto_vocabReady = Object.values(_auto_vocabByAttr).some(m => m && m.size);
-  }
+    for (const attr of AUTOFACET_ATTRS) {
+    let hits = [];
+    try {
+    // returns [{ name, count, isRefined }, ...] or throws if facet unknown
+    hits = res.getFacetValues(attr) || [];
+    } catch (_) {
+    hits = [];
+    }
+    const m = new Map();
+    for (const h of hits) {
+    if (!h || !h.name) continue;
+    m.set(_auto_norm(h.name), String(h.name));
+    }
+    _auto_vocabByAttr[attr] = m;
+    }
 
-  // Find which facet values appear in the user’s query
-  function _auto_extractRefinements(query) {
-  if (!_auto_vocabReady) return [];
-  const nq = _auto_norm(query);
-  const found = [];
-  for (const attr of AUTOFACET_ATTRS) {
-  const vocab = _auto_vocabByAttr[attr];
-  if (!vocab) continue;
-  for (const [nVal, original] of vocab.entries()) {
-  if (nq.includes(nVal)) {
-  found.push({ attr, value: original, nVal });
+    // Mark ready if we got anything at all
+    _auto_vocabReady = Object.values(_auto_vocabByAttr).some(m => m && m.size);
+    }
+
+    // Find which facet values appear in the user’s query
+    function _auto_extractRefinements(query) {
+    if (!_auto_vocabReady) return [];
+    const nq = _auto_norm(query);
+    const found = [];
+    for (const attr of AUTOFACET_ATTRS) {
+    const vocab = _auto_vocabByAttr[attr];
+    if (!vocab) continue;
+    for (const [nVal, original] of vocab.entries()) {
+    if (nq.includes(nVal)) {
+    found.push({ attr, value: original, nVal });
 }
 }
 }
@@ -316,6 +323,7 @@ origin: 'origin',
 materialcategory: 'materialcategory',
 pricegroup: 'pricegroup',
 promos: 'promos',
+collection: 'collection',
 };
 // Friendly sort slugs ↔ index names
 const SORT_ROUTE_TO_INDEX = {
@@ -369,6 +377,8 @@ const baseUrl = `${location.origin}/`;
   queryParameters.materialcategory = routeState.material;
   if (routeState.promo)
   queryParameters.promos = routeState.promo;
+  if (routeState.collection)
+  queryParameters.collection = routeState.collection;
 
   // include sort in the URL when selected
   if (routeState.sortBy)
@@ -402,6 +412,7 @@ return `${baseUrl}search/${categoryPath}${queryString}`;
     const pricegroup = params.pricegroup ?? [];
     const materialcategory = params.materialcategory ?? [];
     const promos = params.promos ?? [];
+    const collection = params.collection ?? params.Collection ?? [];
 
     // Accept canonical ?sortBy=index as well as a friendly ?sort=newest
     const sort = params.sort || (params.sortBy ? SORT_INDEX_TO_ROUTE[params.sortBy] : undefined);
@@ -420,6 +431,8 @@ return `${baseUrl}search/${categoryPath}${queryString}`;
       price: normalizeFromUrlSingle(pricegroup),
       material: normalizeFromUrlSingle(materialcategory),
       promo: normalizeFromUrlSingle(promos),
+      // Preserve exact hyphenated collection values
+      collection: (Array.isArray(collection) ? collection : [collection]).filter(Boolean),
       sort,
     };
   }
@@ -444,6 +457,8 @@ return `${baseUrl}search/${categoryPath}${queryString}`;
         color: canonicalizeArrayForUrl(rl['attributes.Colors'] || []),
         origin: canonicalizeArrayForUrl(rl['attributes.Origin'] || []),
         material: canonicalizeArrayForUrl(rl['attributes.MaterialCategory'] || []),
+        // Keep collection value exactly as in URL
+        'attributes.Collection': (Array.isArray(rl['attributes.Collection']) ? rl['attributes.Collection'] : [rl['attributes.Collection']]).filter(Boolean),
       };
     },
 
@@ -465,6 +480,8 @@ return `${baseUrl}search/${categoryPath}${queryString}`;
               'attributes.Colors': normalizeFromUrlSingle(route.colors || route.color || []),
               'attributes.Origin': normalizeFromUrlSingle(route.origin || []),
               'attributes.MaterialCategory': normalizeFromUrlSingle(route.material || route.materialcategory || []),
+              // Keep collection value exactly as in URL
+              'attributes.Collection': (Array.isArray(route.collection) ? route.collection : [route.collection]).filter(Boolean),
             },
           },
         };
@@ -485,6 +502,10 @@ return `${baseUrl}search/${categoryPath}${queryString}`;
 const {infiniteHits} = instantsearch.widgets;
 const {createInfiniteHitsSessionStorageCache} = instantsearch;
 const sessionStorageCache = createInfiniteHitsSessionStorageCache();
+// Register a virtual refinementList so Collection refinements from routing apply
+const virtualCollection = instantsearch.connectors.connectRefinementList(() => {})({
+  attribute: 'attributes.Collection'
+});
 
 const rugPadsExclude = 'NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad"' + ' AND NOT categories.name:"Rugstudio-Rug-Pads"';
 //const customStats = connectStats(renderStats);
@@ -508,7 +529,7 @@ function truncateText(text, maxLength) {
 
 let showChildPrices = false;
 
-search.addWidgets([instantsearch.widgets.searchBox({
+search.addWidgets([virtualCollection, instantsearch.widgets.searchBox({
   container: '#searchbox',
   placeholder: 'Find the perfect rug',
   autofocus: true,
@@ -587,7 +608,7 @@ return html`<span>${count}</span>`;
                container: '#current-refinements',
 
                /* show ONLY the facets you expose elsewhere */
-               includedAttributes: ['manufacturer', 'attributes.Styles', 'attributes.Size', 'attributes.PriceGroup', 'attributes.MaterialCategory', 'attributes.Colors', 'attributes.Weave', 'attributes.Promotion'],
+               includedAttributes: ['manufacturer', 'attributes.Styles', 'attributes.Size', 'attributes.PriceGroup', 'attributes.MaterialCategory', 'attributes.Colors', 'attributes.Weave', 'attributes.Promotion', 'attributes.Collection'],
 
                /* optional: rename long attribute paths for nicer labels */
                transformItems(items) {
@@ -862,6 +883,7 @@ showMoreText: ({isShowingMore}) => isShowingMore ? '<span class="facetshowless">
 }), instantsearch.widgets.configure({
 hitsPerPage: 16,
 filters: 'hide = 0 AND custom_flag1 = 1' + ' AND NOT categories.name:"Rug Pads"' + ' AND NOT categories.name:"Karastan-Rug-Pad"' + ' AND NOT categories.name:"Rugstudio-Rug-Pads"',
+facets: ['attributes.Collection'],
 //query: initialQuery,
 clickAnalytics: true,
 //getRankingInfo: true,
@@ -916,8 +938,8 @@ const childFilter = 'custom_flag1 = 0';
 const newFilterString = [...baseFilters, wantChildren ? childFilter : parentFilter, rugPadsExclude].join(' AND ');
 
 if (wantChildren !== showingChildren || search.helper.state.filters !== newFilterString) {
-  showingChildren = wantChildren;
-  search.helper.setQueryParameter('filters', newFilterString).search();
+showingChildren = wantChildren;
+search.helper.setQueryParameter('filters', newFilterString).search();
 }
 
 const results = search.renderState?.product_index?.infiniteHits?.results;
@@ -927,35 +949,35 @@ const hasHits = hits.length > 0;
 const shouldShowTrending = !hasHits || !hasQuery;
 
 if (hasHits) {
-  aa('viewedObjectIDs', {
-    eventName: 'Hits Viewed',
-    index: search.helper.state.sortBy || 'product_index',
-    objectIDs: hits.map(hit => hit.objectID),
-  });
+aa('viewedObjectIDs', {
+eventName: 'Hits Viewed',
+index: search.helper.state.sortBy || 'product_index',
+objectIDs: hits.map(hit => hit.objectID),
+});
 }
 
 const trendingContainer = document.querySelector('#trending-items');
 if (trendingContainer) {
-  if (shouldShowTrending) {
-    if (!trendingWidget) {
-      const {trendingItems} = instantsearch.widgets;
-      trendingWidget = trendingItems({
-        container: '#trending-items',
-        limit: 8,
-        queryParameters: {
-          filters: 'hide=0 AND custom_flag1=1 AND NOT categories.name:"Rug Pads"',
-          clickAnalytics: true,
-        },
-        templates: {
-          item(reco, {html}) {
-            const rawImg = reco.image || reco.image_url || (reco.images && reco.images[0] && reco.images[0].url);
-            const resizedImage = rawImg ? rawImg.replace('f_auto%2Cq_auto', 'if_tar_gt_1.5/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:15/if_else/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:1/if_end').replace('/s_', '/l_') : null;
-            const isParent = reco.custom_flag1 === 1;
-            const titleText = cleanTitle(reco.title || reco.name || `Item ${reco.objectID}`);
-            const displayTitle = isParent ? truncateText(titleText, 40) : titleText;
-            const showPrice = showChildPrices && !isParent && reco.sale_price;
+if (shouldShowTrending) {
+if (!trendingWidget) {
+const {trendingItems} = instantsearch.widgets;
+trendingWidget = trendingItems({
+container: '#trending-items',
+limit: 8,
+queryParameters: {
+filters: 'hide=0 AND custom_flag1=1 AND NOT categories.name:"Rug Pads"',
+clickAnalytics: true,
+},
+templates: {
+item(reco, {html}) {
+const rawImg = reco.image || reco.image_url || (reco.images && reco.images[0] && reco.images[0].url);
+const resizedImage = rawImg ? rawImg.replace('f_auto%2Cq_auto', 'if_tar_gt_1.5/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:15/if_else/c_mfit%2Cf_auto%2Cq_auto%2Cw_170%2Ce_trim:1/if_end').replace('/s_', '/l_') : null;
+const isParent = reco.custom_flag1 === 1;
+const titleText = cleanTitle(reco.title || reco.name || `Item ${reco.objectID}`);
+const displayTitle = isParent ? truncateText(titleText, 40) : titleText;
+const showPrice = showChildPrices && !isParent && reco.sale_price;
 
-            return html`
+return html`
   <div class="hit-card"><a class="trending-item" href="${reco.url || '#'}"
   rel="noopener"onClick="${ () => {
   if (window.aa) {
@@ -973,39 +995,39 @@ if (trendingContainer) {
                                                ${showPrice ? html`<div class="hitPrice">$${Number(reco.sale_price).toFixed(2)}</div>` : ''}
         </a></div>
           `;
-          },
-        },
-        transformItems(items) {
-          if (!Array.isArray(items) || !items.length) {
-            const sec = document.querySelector('#trending-section');
-            if (sec)
-              sec.style.display = 'none';
-            return items || [];
-          }
+},
+},
+transformItems(items) {
+if (!Array.isArray(items) || !items.length) {
+const sec = document.querySelector('#trending-section');
+if (sec)
+sec.style.display = 'none';
+return items || [];
+}
 
-          const sec = document.querySelector('#trending-section');
-          if (sec)
-            sec.style.display = '';
+const sec = document.querySelector('#trending-section');
+if (sec)
+sec.style.display = '';
 
-          return items.filter(reco => reco && reco.objectID);
-        },
-      });
+return items.filter(reco => reco && reco.objectID);
+},
+});
 
-      search.addWidgets([trendingWidget]);
-      search.refresh();
+search.addWidgets([trendingWidget]);
+search.refresh();
 
-      const emptyTitle = document.querySelector('.ais-InfiniteHits--empty h1');
-      if (emptyTitle)
-        emptyTitle.textContent = "We didn't find any results";
-    }
-  } else if (trendingWidget) {
-    search.removeWidgets([trendingWidget]);
-    trendingWidget = null;
-    trendingContainer.innerHTML = '';
-    const sec = document.querySelector('#trending-section');
-    if (sec)
-      sec.style.display = 'none';
-  }
+const emptyTitle = document.querySelector('.ais-InfiniteHits--empty h1');
+if (emptyTitle)
+emptyTitle.textContent = "We didn't find any results";
+}
+} else if (trendingWidget) {
+search.removeWidgets([trendingWidget]);
+trendingWidget = null;
+trendingContainer.innerHTML = '';
+const sec = document.querySelector('#trending-section');
+if (sec)
+sec.style.display = 'none';
+}
 }
 
 });
@@ -1029,15 +1051,12 @@ if (!btn.dataset.blurAttached) {
 btn.addEventListener('click', () => btn.blur());
 btn.dataset.blurAttached = 'true';
 }
-}
-);
-}
-);
+});
+});
 
 // Start observing the body for dynamic widgets
 observer.observe(document.body, {
 childList: true,
 subtree: true
 });
-}
-);
+});
