@@ -83,77 +83,77 @@ function normalizeFromUrlSingle(valueOrArray) {
     const sizeCandidate = s.replace(/[×]/g, 'x');
     const sizeParts = sizeCandidate.split(/x/i).map(part => part.trim()).filter(Boolean);
     const sizeLike = sizeParts.length >= 2 && sizeParts.every(part => /^[0-9'"′″\s\/.:-]+$/.test(part));
-    if (sizeLike) {
-      const normalizedParts = sizeParts.map(part => part.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
-      const joinParts = delim => normalizedParts.join(delim).replace(/\s+/g, ' ').trim();
-      const collapsed = normalizedParts.join('x').replace(/\s+/g, '');
+                                                                         if (sizeLike) {
+                                                                         const normalizedParts = sizeParts.map(part => part.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+                                                                         const joinParts = delim => normalizedParts.join(delim).replace(/\s+/g, ' ').trim();
+                                                                         const collapsed = normalizedParts.join('x').replace(/\s+/g, '');
 
-      if (normalizedParts.length) {
-        const spaced = joinParts(' x ');
-        const spacedUpper = joinParts(' X ');
-        if (spaced) variants.add(spaced);
-        if (spacedUpper) variants.add(spacedUpper);
-        if (collapsed) variants.add(collapsed);
+                                                                         if (normalizedParts.length) {
+                                                                         const spaced = joinParts(' x ');
+                                                                         const spacedUpper = joinParts(' X ');
+                                                                         if (spaced) variants.add(spaced);
+                                                                         if (spacedUpper) variants.add(spacedUpper);
+                                                                         if (collapsed) variants.add(collapsed);
 
-        const hasQuote = normalizedParts.some(part => /['"′″]/.test(part));
-        const isPlainNumber = part => /^\d+(?:\s*\d\/\d)?$/.test(part);
-        if (!hasQuote && normalizedParts.every(isPlainNumber)) {
-          const withFeetParts = normalizedParts.map(part => `${part}'`);
-          const withFeet = withFeetParts.join(' x ');
-          const withFeetUpper = withFeetParts.join(' X ');
-          if (withFeet) variants.add(withFeet);
-          if (withFeetUpper) variants.add(withFeetUpper);
-        }
-      }
-    }
+                                                                         const hasQuote = normalizedParts.some(part => /['"′″]/.test(part));
+                                                                         const isPlainNumber = part => /^\d+(?:\s*\d\/\d)?$/.test(part);
+                                                                         if (!hasQuote && normalizedParts.every(isPlainNumber)) {
+                                                                         const withFeetParts = normalizedParts.map(part => `${part}'`);
+                                                                         const withFeet = withFeetParts.join(' x ');
+                                                                         const withFeetUpper = withFeetParts.join(' X ');
+                                                                         if (withFeet) variants.add(withFeet);
+                                                                         if (withFeetUpper) variants.add(withFeetUpper);
+                                                                         }
+                                                                         }
+                                                                         }
 
-    // Keep the raw trimmed value as a fallback
-    if (s)
-    variants.add(s);
+                                                                         // Keep the raw trimmed value as a fallback
+                                                                         if (s)
+                                                                         variants.add(s);
 
-    for (const v of variants) {
-      const finalValue = String(v).replace(/\s+/g, ' ').trim();
-      if (finalValue)
-      out.push(finalValue);
-    }
-  }
-    return dedupeLoose(out);
-}
+                                                                         for (const v of variants) {
+                                                                         const finalValue = String(v).replace(/\s+/g, ' ').trim();
+                                                                         if (finalValue)
+                                                                         out.push(finalValue);
+                                                                         }
+                                                                         }
+                                                                         return dedupeLoose(out);
+                                                                         }
 
-    // Prefer hyphenated params in the URL, but don't make ugly slugs when punctuation is present.
-    // If value contains punctuation other than hyphen, leave it as-is (ex: "Sisal / Jute").
-    function canonicalizeForUrl(v) {
-    const str = String(v || '');
+                                                                         // Prefer hyphenated params in the URL, but don't make ugly slugs when punctuation is present.
+                                                                         // If value contains punctuation other than hyphen, leave it as-is (ex: "Sisal / Jute").
+                                                                         function canonicalizeForUrl(v) {
+                                                                         const str = String(v || '');
 
-    // Special handling for price groups - preserve them as-is
-    const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
-    if (isPriceGroup) {
-      return str;
-    }
+                                                                         // Special handling for price groups - preserve them as-is
+                                                                         const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
+                                                                         if (isPriceGroup) {
+                                                                         return str;
+                                                                         }
 
-    // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
-    const isSizeRange = /.*\d+['"]?-\d+['"]?\+?$/.test(str);
-    if (isSizeRange) {
-      return str;
-    }
+                                                                         // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
+                                                                         const isSizeRange = /.*\d+['"]?-\d+['"]?\+?$/.test(str);
+                                                                         if (isSizeRange) {
+                                                                         return str;
+                                                                         }
 
-    // Special handling for specific size values that should keep their hyphens
-    const specificSizesWithHyphens = /^(Runners|Square|Round|Octagon|Oval)-(Grand|Wide|Small)$/.test(str);
-    if (specificSizesWithHyphens) {
-    return str;
-    }
+                                                                         // Special handling for specific size values that should keep their hyphens
+                                                                         const specificSizesWithHyphens = /^(Runners|Square|Round|Octagon|Oval)-(Grand|Wide|Small)$/.test(str);
+                                                                         if (specificSizesWithHyphens) {
+                                                                         return str;
+                                                                         }
 
-    const hasOtherPunct = /[^A-Za-z0-9\s-]/.test(str);
-    // e.g., "/", "&", ","
-    if (hasOtherPunct)
-    return str;
-    // keep readable (e.g., "Sisal / Jute")
-    return str.trim().replace(/\s+/g, '-').replace(/--+/g, '-');
-    }
+                                                                         const hasOtherPunct = /[^A-Za-z0-9\s-]/.test(str);
+                                                                         // e.g., "/", "&", ","
+                                                                         if (hasOtherPunct)
+                                                                         return str;
+                                                                         // keep readable (e.g., "Sisal / Jute")
+                                                                         return str.trim().replace(/\s+/g, '-').replace(/--+/g, '-');
+                                                                         }
 
-    function canonicalizeArrayForUrl(arr) {
-    // dedupe before and after canonicalization
-    const a = dedupeLoose(arr || []).map(canonicalizeForUrl);
+                                                                         function canonicalizeArrayForUrl(arr) {
+                                                                         // dedupe before and after canonicalization
+                                                                         const a = dedupeLoose(arr || []).map(canonicalizeForUrl);
     return dedupeLoose(a);
   }
 
@@ -499,6 +499,32 @@ return `${baseUrl}search/${categoryPath}${queryString}`;
     }*/
 });
 
+let redirectedOnce = false;
+
+// If the browser restores the page from the back/forward cache, reset the flag.
+window.addEventListener('pageshow', () => { redirectedOnce = false; });
+
+const redirectWidget = {
+  render({ results }) {
+    if (redirectedOnce || !results || !results._rawResults) return;
+
+    const rc = results._rawResults
+      .map(r => r && r.renderingContent && r.renderingContent.redirect)
+      .find(Boolean);
+
+    if (!rc) return;
+
+    const url = typeof rc === 'string' ? rc : rc.url || rc.path || rc.href;
+    if (!url) return;
+
+    redirectedOnce = true;
+    // Using replace avoids adding a useless "search" page to the back stack.
+    window.location.replace(url);
+  }
+};
+
+search.addWidgets([redirectWidget]);
+
 const {infiniteHits} = instantsearch.widgets;
 const {createInfiniteHitsSessionStorageCache} = instantsearch;
 const sessionStorageCache = createInfiniteHitsSessionStorageCache();
@@ -539,7 +565,8 @@ search.addWidgets([virtualCollection, instantsearch.widgets.searchBox({
     const normalized = query.trim().toLowerCase();
 
     // Your existing rug-pad redirect logic
-    if (['rug pad', 'rug pads', 'jade pad', 'msm', 'cushion grip', 'magic stop', 'anchor pad', 'deluxe pad', 'non slip pad', 'non-slip pads'].includes(normalized)) {
+    const padKeywords = ['rug pad', 'rug pads', 'jade pad', 'msm', 'cushion grip', 'magic stop', 'anchor pad', 'deluxe pad', 'non slip pad', 'non-slip pads'];
+    if (padKeywords.some(k => normalized.includes(k))) {
       window.location.href = '/rugstudio-rug-pads.html';
       return;
     }
@@ -897,7 +924,7 @@ let trendingIDs = new Set();
 searchClient.getRecommendations({
 requests: [{
 model: 'trending-items',
-threshold: 60,
+threshold: 53,
 indexName: 'product_index',
 maxRecommendations: TRENDING_N,
 queryParameters: {

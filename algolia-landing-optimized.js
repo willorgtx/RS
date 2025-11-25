@@ -157,6 +157,18 @@ function normalizeFromUrlSingle(valueOrArray) {
       continue;
     }
 
+    // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
+    if (/.*\d+['"]?-\d+['"]?\+?$/.test(s)) {
+      out.push(s);
+      continue;
+    }
+
+    // Special handling for specific size values that should keep their hyphens
+    if (/^(Runners|Square|Round|Octagon|Oval)-(Grand|Wide|Small)$/.test(s)) {
+      out.push(s);
+      continue;
+    }
+
     const variants = new Set();
     const base = titleCaseWords(s.replace(/-/g, ' ')).replace(/\s+/g, ' ').trim();
     if (base) variants.add(base);
@@ -200,16 +212,28 @@ function normalizeFromUrlSingle(valueOrArray) {
 
 function canonicalizeForUrl(v) {
   const str = String(v || '');
-  
+
   // Special handling for price groups - preserve them as-is
   const isPriceGroup = /^\$?\d+-\$?\d+$/.test(str);
   if (isPriceGroup) {
     return str;
   }
-  
+
+  // Special handling for size ranges - preserve hyphens in size ranges like "Runners 12'-14'+"
+  const isSizeRange = /.*\d+['"]?-\d+['"]?\+?$/.test(str);
+  if (isSizeRange) {
+    return str;
+  }
+
+  // Special handling for specific size values that should keep their hyphens
+  const specificSizesWithHyphens = /^(Runners|Square|Round|Octagon|Oval)-(Grand|Wide|Small)$/.test(str);
+  if (specificSizesWithHyphens) {
+    return str;
+  }
+
   const hasOtherPunct = /[^A-Za-z0-9\s-]/.test(str);
   if (hasOtherPunct) return str;
-  
+
   return str.trim().replace(/\s+/g, '-').replace(/--+/g, '-');
 }
 

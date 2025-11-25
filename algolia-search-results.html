@@ -1,3 +1,27 @@
+<!-- IMMEDIATE REDIRECT CHECK - Runs before any rendering -->
+<script>
+(function() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const initialQuery = params.get('q') || '';
+    const padKeywords = ['rug pad', 'rug pads', 'jade pad', 'msm', 'cushion grip', 'magic stop', 'anchor pad', 'deluxe pad', 'non slip pad', 'non-slip pads'];
+    const normalizedInitial = initialQuery.trim().toLowerCase();
+    if (normalizedInitial && padKeywords.some(k => normalizedInitial.includes(k))) {
+      // Hide body immediately to prevent flash
+      if (document.body) {
+        document.body.style.display = 'none';
+      } else {
+        // If body doesn't exist yet, hide html element
+        document.documentElement.style.visibility = 'hidden';
+      }
+      // Redirect immediately
+      window.location.replace('/rugstudio-rug-pads.html');
+    }
+  } catch(e) {
+    // Silently fail if there's an error
+  }
+})();
+</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8.5.1/themes/algolia.css" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/instantsearch.css@8.5.1/themes/reset-min.css" crossorigin="anonymous">
 
